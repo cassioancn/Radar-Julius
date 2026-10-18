@@ -93,13 +93,12 @@ st.markdown("""
 
 # Barra lateral com Perfil e Geolocalização
 with st.sidebar:
-    julius_root = Path(__file__).resolve().parent / "julius.png"
     julius_assets = Path(__file__).resolve().parent / "assets" / "julius.jpg"
+    julius_root = Path(__file__).resolve().parent / "julius.png"
+    img_path = str(julius_assets) if julius_assets.exists() else (str(julius_root) if julius_root.exists() else None)
     
-    if julius_root.exists():
-        st.image(str(julius_root), use_container_width=True)
-    elif julius_assets.exists():
-        st.image(str(julius_assets), use_container_width=True)
+    if img_path:
+        st.image(img_path, width=110)
     else:
         st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=70)
     st.title("🎯 Radar Julius")
