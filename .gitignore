@@ -1,0 +1,29 @@
+# Ambientes virtuais e cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+venv/
+ENV/
+
+# Arquivos de ambiente e segredos
+.env
+.env.local
+.streamlit/secrets.toml
+
+# Banco de dados local de teste
+*.db
+*.sqlite
+*.sqlite3
+radar_julius.db
+
+# Logs e arquivos temporários
+*.log
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDEs
+.vscode/
+.idea/
