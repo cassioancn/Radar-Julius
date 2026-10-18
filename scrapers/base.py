@@ -29,6 +29,10 @@ class ProductItem:
     location: Optional[str] = None
     rating: Optional[float] = None
     in_stock: bool = True
+    unit_price: Optional[float] = None
+    unit_label: Optional[str] = None
+    detected_size: Optional[str] = None
+    has_unit_price: bool = False
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

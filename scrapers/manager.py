@@ -8,6 +8,7 @@ from .supermarkets import AtacadaoScraper, MacromixScraper, RissulScraper, Stock
 from database.db import get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice
 from notifications.n8n_dispatcher import dispatch_price_drop_alert
+from utils.unit_parser import calculate_normalized_price
 
 class ScraperManager:
     """Orquestrador central de busca, ranqueamento Top 5 e atualização do Top 3 histórico."""
@@ -34,11 +35,14 @@ class ScraperManager:
         include_supermarkets: bool = True,
         city: Optional[str] = None,
         uf: Optional[str] = None,
-        top_n: int = 5
+        top_n: int = 5,
+        target_unit: Optional[str] = None,
+        sort_by_unit: bool = False,
+        filter_unit_match: bool = False
     ) -> Dict[str, Any]:
         """
         Executa busca concorrente em todas as fontes selecionadas.
-        Retorna o Top N melhores preços e lista completa.
+        Normaliza preços por unidade (R$/kg, R$/L, R$/un) e ranqueia pelo menor preço ou melhor custo-benefício.
         """
         active_scrapers = []
         if include_retail:
@@ -67,8 +71,42 @@ class ScraperManager:
                 if res:
                     all_items.extend(res)
 
-        # Ordenação rigorosa por menor preço
-        all_items.sort(key=lambda x: x.price)
+        # 1. Normalização de Preço Unitário (kg, L, un)
+        for item in all_items:
+            norm = calculate_normalized_price(
+                price=item.price,
+                title=item.title,
+                fallback_text=item.url,
+                target_unit=target_unit
+            )
+            if norm.get("has_unit_price"):
+                item.has_unit_price = True
+                item.unit_price = norm["unit_price"]
+                item.unit_label = norm["unit_label"]
+                item.detected_size = norm["detected_size"]
+            else:
+                item.has_unit_price = False
+                item.unit_price = item.price
+                item.unit_label = None
+                item.detected_size = norm.get("detected_size", "Embalagem Padrão")
+
+        # 2. Filtragem opcional por unidade alvo (ex: apenas quilo ou apenas litro)
+        if filter_unit_match and target_unit and target_unit != "auto":
+            matched = [it for it in all_items if it.has_unit_price and (
+                (target_unit == "kg" and "kg" in (it.unit_label or "").lower()) or
+                (target_unit == "L" and "/ l" in (it.unit_label or "").lower()) or
+                (target_unit == "un" and "/ un" in (it.unit_label or "").lower())
+            )]
+            # Se encontrar correspondentes, filtra; se não, mantém todos para não deixar vazio
+            if matched:
+                all_items = matched
+
+        # 3. Ordenação: por menor custo unitário OU por menor preço total do pacote
+        if sort_by_unit:
+            # Itens com unidade normalizada vêm na frente ordenados pelo menor preço unitário
+            all_items.sort(key=lambda x: (0 if x.has_unit_price else 1, x.unit_price if x.has_unit_price else x.price))
+        else:
+            all_items.sort(key=lambda x: x.price)
 
         # Top N melhores preços
         top_items = all_items[:top_n]
@@ -79,17 +117,26 @@ class ScraperManager:
         max_price = all_items[-1].price if all_items else 0.0
         potential_savings = max_price - min_price if all_items else 0.0
 
+        # Estatísticas de unidade quando aplicável
+        items_with_unit = [it for it in top_items if it.has_unit_price and it.unit_price]
+        min_unit_price = min((it.unit_price for it in items_with_unit), default=0.0) if items_with_unit else 0.0
+        max_unit_price = max((it.unit_price for it in items_with_unit), default=0.0) if items_with_unit else 0.0
+
         return {
             "query": query,
             "timestamp": datetime.utcnow().isoformat(),
             "total_found": len(all_items),
             "top_prices": top_items,
             "all_results": all_items,
+            "sort_by_unit": sort_by_unit,
+            "target_unit": target_unit,
             "stats": {
                 "min_price": round(min_price, 2),
                 "max_price": round(max_price, 2),
                 "avg_price": round(avg_price, 2),
-                "potential_savings": round(potential_savings, 2)
+                "potential_savings": round(potential_savings, 2),
+                "min_unit_price": round(min_unit_price, 2),
+                "max_unit_price": round(max_unit_price, 2)
             }
         }
 

@@ -88,6 +88,25 @@ st.markdown("""
         font-size: 12px;
         font-weight: bold;
     }
+    .unit-badge {
+        background-color: #0284c7;
+        color: #f0f9ff;
+        font-weight: 700;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 13px;
+        display: inline-block;
+        border: 1px solid #38bdf8;
+    }
+    .size-badge {
+        background-color: #334155;
+        color: #cbd5e1;
+        font-weight: 600;
+        padding: 4px 8px;
+        border-radius: 6px;
+        font-size: 12px;
+        display: inline-block;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -207,8 +226,9 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # Abas Principais
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "🔍 Buscar Preços (Top 5)",
+tab_mercado, tab_varejo, tab_monitor, tab_scan, tab_n8n, tab_geo = st.tabs([
+    "🛒 Mercado (Alimentos & Supermercado)",
+    "📺 Bens de Consumo (Eletrônicos & Varejo)",
     "📊 Produtos Monitorados & Top 3 Histórico",
     "⏱️ Varredura & Monitoramento",
     "⚡ Integração n8n (WhatsApp / E-mail)",
@@ -216,84 +236,302 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 # -------------------------------------------------------------
-# ABA 1: BUSCAR PREÇOS (TOP 5)
+# ABA 1: 🛒 SUPERMERCADO & ALIMENTOS (COM PREÇO POR UNIDADE/KG/L)
 # -------------------------------------------------------------
-with tab1:
-    col_search, col_niche = st.columns([3, 1])
-    with col_search:
-        search_query = st.text_input(
-            "Digite o produto específico que deseja cotar:",
-            placeholder="Ex: Arroz 5kg, Feijão Preto, Cerveja Heineken, Azeite de Oliva, Playstation 5, Smart TV 50..."
+with tab_mercado:
+    st.subheader("🛒 Supermercados & Atacarejos (Alimentos, Bebidas & Limpeza)")
+    st.caption("O Radar Julius varre os atacados e mercados da sua região e calcula o **preço normalizado por Quilo (R$/kg), Litro (R$/L) ou Unidade (R$/un)** para garantir que você encontre a melhor economia real, eliminando a pegadinha das embalagens pequenas!")
+
+    col_m_search, col_m_niche = st.columns([3, 1.3])
+    with col_m_search:
+        mercado_query = st.text_input(
+            "Produto de mercado procurado:",
+            placeholder="Ex: Queijo mussarela, Arroz 5kg, Cerveja lata 350ml, Picanha, Azeite de oliva...",
+            key="mercado_search_input"
         )
-    with col_niche:
-        niche_option = st.selectbox(
-            "Ou selecione um nicho:",
-            ["Personalizado", "Alimentos Básicos", "Bebidas & Cervejas", "Limpeza", "Eletrônicos & Games", "Higiene & Fraldas", "Carnes & Churrasco"]
+    with col_m_niche:
+        mercado_niche = st.selectbox(
+            "Sugestões de Produtos:",
+            [
+                "Personalizado",
+                "🧀 Queijo Mussarela",
+                "🌾 Arroz 5kg Tipo 1",
+                "🥩 Picanha Bovina kg",
+                "🍺 Cerveja Heineken Lata",
+                "🫒 Azeite de Oliva Extra Virgem",
+                "🥛 Leite Integral 1L",
+                "🧼 Sabão Líquido Omo",
+                "☕ Café em Pó 500g"
+            ],
+            key="mercado_niche_select"
         )
 
-    # Preenche query rápida se selecionar nicho
-    if niche_option != "Personalizado" and not search_query:
-        if niche_option == "Alimentos Básicos":
-            search_query = "Arroz 5kg Tipo 1"
-        elif niche_option == "Bebidas & Cervejas":
-            search_query = "Cerveja Heineken Lata 350ml"
-        elif niche_option == "Limpeza":
-            search_query = "Detergente Líquido 500ml"
-        elif niche_option == "Eletrônicos & Games":
-            search_query = "Smart TV 50 Polegadas 4K"
-        elif niche_option == "Higiene & Fraldas":
-            search_query = "Fralda Pampers Confort Sec G"
-        elif niche_option == "Carnes & Churrasco":
-            search_query = "Picanha Bovina Resfriada kg"
+    # Preenche query automática se selecionou sugestão
+    if mercado_niche != "Personalizado" and not mercado_query:
+        if "Queijo" in mercado_niche:
+            mercado_query = "Queijo mussarela"
+        elif "Arroz" in mercado_niche:
+            mercado_query = "Arroz 5kg"
+        elif "Picanha" in mercado_niche:
+            mercado_query = "Picanha bovina"
+        elif "Cerveja" in mercado_niche:
+            mercado_query = "Cerveja Heineken lata"
+        elif "Azeite" in mercado_niche:
+            mercado_query = "Azeite de oliva extra virgem"
+        elif "Leite" in mercado_niche:
+            mercado_query = "Leite integral"
+        elif "Sabão" in mercado_niche:
+            mercado_query = "Sabao liquido"
+        elif "Café" in mercado_niche:
+            mercado_query = "Cafe em po"
 
-    col_filters1, col_filters2, col_btn = st.columns([2, 2, 1.5])
-    with col_filters1:
-        inc_retail = st.checkbox("Incluir Grandes Varejistas (Amazon, ML, Shopee, Magalu)", value=True)
-    with col_filters2:
-        inc_markets = st.checkbox(f"Incluir Supermercados ({user_city} - {user_state})", value=True)
-    with col_btn:
-        search_btn = st.button("🚀 Buscar Melhores Preços", use_container_width=True, type="primary")
+    # Linha de Controles: Unidade e Critério de Ranqueamento
+    col_u1, col_u2, col_u3 = st.columns([1.8, 2.2, 1.4])
+    with col_u1:
+        unit_select = st.selectbox(
+            "⚖️ Base de Comparação / Volume:",
+            [
+                "⚡ Automático (Detectar kg, L ou un)",
+                "⚖️ Preço por Quilo (R$ / kg) — Frios, Carnes, Grãos",
+                "🥛 Preço por Litro (R$ / L) — Bebidas, Óleos, Leite",
+                "📦 Preço por Unidade (R$ / un) — Ovos, Rolos, Sabonetes"
+            ],
+            index=0,
+            key="mercado_unit_base"
+        )
+        target_unit_code = "auto"
+        if "Quilo" in unit_select:
+            target_unit_code = "kg"
+        elif "Litro" in unit_select:
+            target_unit_code = "L"
+        elif "Unidade" in unit_select:
+            target_unit_code = "un"
 
-    if search_btn and search_query:
-        with st.spinner(f"Varrendo lojas e atacados para '{search_query}'..."):
-            results = scraper_manager.search_all(
-                query=search_query,
-                include_retail=inc_retail,
-                include_supermarkets=inc_markets,
+    with col_u2:
+        sort_mode = st.radio(
+            "Critério de Ranqueamento:",
+            [
+                "🏆 Melhor Custo-Benefício por Unidade (Recomendado)",
+                "📦 Menor Preço Total da Embalagem"
+            ],
+            horizontal=True,
+            key="mercado_sort_mode"
+        )
+        sort_by_unit = ("Melhor Custo-Benefício" in sort_mode)
+
+    with col_u3:
+        filter_unit_match = st.checkbox(
+            "Filtrar apenas itens com essa unidade",
+            value=False,
+            help="Desconsidera ofertas que não informarem o peso/volume selecionado."
+        )
+
+    col_btn_m, _ = st.columns([2, 3])
+    with col_btn_m:
+        btn_search_mercado = st.button("🚀 Buscar no Supermercado & Atacado", use_container_width=True, type="primary", key="btn_mercado_search")
+
+    if btn_search_mercado and mercado_query:
+        with st.spinner(f"Consultando Atacadão e Rissul para '{mercado_query}' ({user_city} - {user_state})..."):
+            mercado_res = scraper_manager.search_all(
+                query=mercado_query,
+                include_retail=False,
+                include_supermarkets=True,
                 city=user_city,
                 uf=user_state,
-                top_n=5
+                top_n=8,
+                target_unit=target_unit_code,
+                sort_by_unit=sort_by_unit,
+                filter_unit_match=filter_unit_match
             )
-            st.session_state["last_search_results"] = results
-            st.session_state["last_search_query"] = search_query
+            st.session_state["mercado_results"] = mercado_res
+            st.session_state["mercado_last_query"] = mercado_query
 
-    # Exibe resultados armazenados
-    if "last_search_results" in st.session_state:
-        res = st.session_state["last_search_results"]
+    # Exibição dos Resultados de Mercado
+    if "mercado_results" in st.session_state:
+        res = st.session_state["mercado_results"]
         stats = res.get("stats", {})
         top_prices = res.get("top_prices", [])
 
         if not top_prices:
-            st.warning(f"⚠️ Nenhuma oferta online encontrada para \"{res.get('query')}\" nas lojas consultadas. Tente pesquisar por um termo mais direto (ex: 'queijo', 'arroz', 'cerveja') ou marque outros filtros.")
+            st.warning(f"⚠️ Nenhuma oferta de mercado encontrada para \"{res.get('query')}\". Tente simplificar a busca (ex: 'queijo', 'cerveja', 'arroz').")
         else:
-            # Banner de Métricas de Economia
+            # Banner de Métricas
             col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-            col_m1.metric("Menor Preço Encontrado", f"R$ {stats.get('min_price', 0.0):.2f}")
-            col_m2.metric("Preço Mais Alto", f"R$ {stats.get('max_price', 0.0):.2f}")
-            col_m3.metric("Preço Médio", f"R$ {stats.get('avg_price', 0.0):.2f}")
-            col_m4.metric("Economia Potencial", f"R$ {stats.get('potential_savings', 0.0):.2f}", delta=f"{round((stats.get('potential_savings', 0)/(stats.get('max_price', 1) or 1))*100, 1)}% menos")
+            if res.get("sort_by_unit") and stats.get("min_unit_price", 0) > 0:
+                col_m1.metric("🏆 Melhor Preço / Unidade", f"R$ {stats['min_unit_price']:.2f}")
+                col_m2.metric("Preço Mais Alto / Unidade", f"R$ {stats['max_unit_price']:.2f}")
+                unit_diff = stats['max_unit_price'] - stats['min_unit_price']
+                col_m3.metric("Economia por Unidade", f"R$ {unit_diff:.2f}")
+                col_m4.metric("Embalagem Mais Acessível", f"R$ {stats.get('min_price', 0.0):.2f}")
+            else:
+                col_m1.metric("Menor Preço Encontrado", f"R$ {stats.get('min_price', 0.0):.2f}")
+                col_m2.metric("Preço Mais Alto", f"R$ {stats.get('max_price', 0.0):.2f}")
+                col_m3.metric("Preço Médio", f"R$ {stats.get('avg_price', 0.0):.2f}")
+                col_m4.metric("Economia Potencial", f"R$ {stats.get('potential_savings', 0.0):.2f}")
 
-            st.subheader(f"🏆 Top 5 Melhores Preços para \"{res.get('query')}\"")
+            order_title = "🏆 Top Melhores Ofertas (Ordenado por Custo-Benefício por Unidade)" if res.get("sort_by_unit") else "🏆 Top Melhores Ofertas (Menor Preço da Embalagem)"
+            st.subheader(f"{order_title} para \"{res.get('query')}\"")
 
-        for idx, item in enumerate(top_prices, start=1):
-            is_top1 = (idx == 1)
-            card_class = "price-card top-1-card" if is_top1 else "price-card"
-            
-            with st.container():
+            for idx, item in enumerate(top_prices, start=1):
+                is_top1 = (idx == 1)
+                card_class = "price-card top-1-card" if is_top1 else "price-card"
+                badge_color = "#22c55e" if is_top1 else "#0284c7"
+                badge_text = "🥇 1º CAMPEÃO DO CUSTO-BENEFÍCIO" if (is_top1 and res.get("sort_by_unit")) else ("🥇 1º MENOR PREÇO" if is_top1 else f"#{idx} Oferta")
+                loc_label = f" • 📍 {item.location}" if item.location else f" • 📍 {user_city} - {user_state}"
+                orig_html = f'<div style="color: #94a3b8; font-size: 13px; text-decoration: line-through;">R$ {item.original_price:.2f}</div>' if item.original_price else ''
+                disc_html = f'<span class="discount-pill">-{item.discount_pct}% OFF</span>' if item.discount_pct else ''
+
+                unit_html = f'<span class="unit-badge">⚖️ {item.unit_label}</span>' if item.has_unit_price and item.unit_label else ''
+                size_html = f'<span class="size-badge">📦 {item.detected_size}</span>' if item.detected_size else ''
+
+                card_html = textwrap.dedent(f"""
+                <div class="{card_class}">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                        <div style="flex: 1; min-width: 250px;">
+                            <span class="julius-badge" style="background-color: {badge_color}; color: white;">
+                                {badge_text}
+                            </span>
+                            <span style="color: #94a3b8; font-size: 13px; margin-left: 10px;">
+                                🏪 {item.store}{loc_label}
+                            </span>
+                            <h3 style="margin: 8px 0 6px 0; color: #f8fafc; font-size: 18px;">{item.title}</h3>
+                            <div style="margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap;">
+                                {unit_html}
+                                {size_html}
+                            </div>
+                        </div>
+                        <div style="text-align: right; min-width: 140px;">
+                            <span class="price-tag">R$ {item.price:.2f}</span>
+                            <div style="color: #94a3b8; font-size: 12px; margin-top: 2px;">Preço da Embalagem</div>
+                            {orig_html}
+                            {disc_html}
+                        </div>
+                    </div>
+                </div>
+                """).strip()
+
+                st.markdown(card_html, unsafe_allow_html=True)
+                c_link, _ = st.columns([2, 3])
+                with c_link:
+                    st.link_button(f"👉 Ver Oferta no {item.store}", item.url, use_container_width=True)
+
+            # Monitorar
+            st.markdown("---")
+            st.subheader("📌 Deseja monitorar este produto de mercado?")
+            col_tm1, col_tm2, col_tm3 = st.columns([3, 1.5, 2])
+            with col_tm1:
+                prod_m_name = st.text_input("Nome do Produto Alvo:", value=res.get("query"), key="track_m_name_input")
+            with col_tm2:
+                drop_m_target = st.number_input("Alertar se cair >= (%)", min_value=1.0, max_value=80.0, value=10.0, step=1.0, key="track_m_drop")
+            with col_tm3:
+                st.write("")
+                st.write("")
+                if st.button("➕ Monitorar Mercado no Banco", type="primary", use_container_width=True, key="btn_track_m"):
+                    with get_db() as db:
+                        existing = db.query(TrackedProduct).filter(TrackedProduct.name.ilike(prod_m_name)).first()
+                        if existing:
+                            st.info(f"O produto '{prod_m_name}' já está cadastrado para monitoramento.")
+                        else:
+                            new_prod = TrackedProduct(
+                                name=prod_m_name,
+                                niche="Mercado & Alimentos",
+                                target_drop_pct=drop_m_target,
+                                last_best_price=top_prices[0].price if top_prices else 0.0,
+                                user_cep=user_cep,
+                                user_city=user_city,
+                                user_state=user_state,
+                                active=True
+                            )
+                            db.add(new_prod)
+                            db.commit()
+                            scraper_manager.process_and_persist_tracked_product(new_prod.id, res)
+                            st.success(f"✅ '{prod_m_name}' cadastrado! Monitoramento ativo.")
+
+# -------------------------------------------------------------
+# ABA 2: 📺 BENS DE CONSUMO (ELETRÔNICOS, ELETRODOMÉSTICOS, MÓVEIS)
+# -------------------------------------------------------------
+with tab_varejo:
+    st.subheader("📺 Bens de Consumo & Grandes E-commerces")
+    st.caption("Varredura em tempo real nos maiores e-commerces do país (Amazon, Mercado Livre, Magalu, Shopee, Fast Shop, Casas Bahia, etc.) via motor Buscapé para eletrônicos, eletrodomésticos, informática e móveis.")
+
+    col_v_search, col_v_niche = st.columns([3, 1.3])
+    with col_v_search:
+        varejo_query = st.text_input(
+            "Produto de consumo que deseja cotar:",
+            placeholder="Ex: Smart TV 50 4K, Geladeira Frost Free, Playstation 5 Slim, Airfryer Mondial, Sofá 3 lugares...",
+            key="varejo_search_input"
+        )
+    with col_v_niche:
+        varejo_niche = st.selectbox(
+            "Sugestões de Produtos:",
+            [
+                "Personalizado",
+                "📺 Smart TV 50 Polegadas 4K",
+                "❄️ Geladeira Frost Free Duplex",
+                "🎮 Playstation 5 Slim",
+                "🍳 Fritadeira Airfryer 4L",
+                "📱 iPhone 15 128GB",
+                "💻 Notebook Dell i5 16GB",
+                "🛋️ Sofá Retrátil 3 Lugares"
+            ],
+            key="varejo_niche_select"
+        )
+
+    # Preenche query automática se selecionou sugestão
+    if varejo_niche != "Personalizado" and not varejo_query:
+        if "Smart TV" in varejo_niche:
+            varejo_query = "Smart TV 50 Polegadas 4K"
+        elif "Geladeira" in varejo_niche:
+            varejo_query = "Geladeira Frost Free"
+        elif "Playstation" in varejo_niche:
+            varejo_query = "Playstation 5 Slim"
+        elif "Airfryer" in varejo_niche:
+            varejo_query = "Fritadeira Airfryer Mondial"
+        elif "iPhone" in varejo_niche:
+            varejo_query = "iPhone 15 128GB"
+        elif "Notebook" in varejo_niche:
+            varejo_query = "Notebook Dell i5"
+        elif "Sofá" in varejo_niche:
+            varejo_query = "Sofa Retratil 3 Lugares"
+
+    col_btn_v, _ = st.columns([2, 3])
+    with col_btn_v:
+        btn_search_varejo = st.button("🚀 Buscar Melhores Preços no Varejo", use_container_width=True, type="primary", key="btn_varejo_search")
+
+    if btn_search_varejo and varejo_query:
+        with st.spinner(f"Varrendo Amazon, Mercado Livre, Magalu e outros para '{varejo_query}'..."):
+            varejo_res = scraper_manager.search_all(
+                query=varejo_query,
+                include_retail=True,
+                include_supermarkets=False,
+                top_n=6,
+                sort_by_unit=False
+            )
+            st.session_state["varejo_results"] = varejo_res
+            st.session_state["varejo_last_query"] = varejo_query
+
+    # Exibição dos Resultados de Varejo
+    if "varejo_results" in st.session_state:
+        res_v = st.session_state["varejo_results"]
+        stats_v = res_v.get("stats", {})
+        top_v = res_v.get("top_prices", [])
+
+        if not top_v:
+            st.warning(f"⚠️ Nenhuma oferta encontrada para \"{res_v.get('query')}\". Tente pesquisar por termos como marca ou modelo exato.")
+        else:
+            col_v1, col_v2, col_v3, col_v4 = st.columns(4)
+            col_v1.metric("Menor Preço Encontrado", f"R$ {stats_v.get('min_price', 0.0):.2f}")
+            col_v2.metric("Preço Mais Alto", f"R$ {stats_v.get('max_price', 0.0):.2f}")
+            col_v3.metric("Preço Médio", f"R$ {stats_v.get('avg_price', 0.0):.2f}")
+            col_v4.metric("Economia Potencial", f"R$ {stats_v.get('potential_savings', 0.0):.2f}")
+
+            st.subheader(f"🏆 Top Melhores Preços para \"{res_v.get('query')}\"")
+
+            for idx, item in enumerate(top_v, start=1):
+                is_top1 = (idx == 1)
+                card_class = "price-card top-1-card" if is_top1 else "price-card"
                 badge_color = "#22c55e" if is_top1 else "#3b82f6"
                 badge_text = "🥇 1º CAMPEÃO DO PREÇO BAIXO" if is_top1 else f"#{idx} Menor Preço"
-                store_kind = "Supermercado / Atacado" if item.store_type == "supermarket" else "Varejo Online"
-                loc_label = f" • 📍 {item.location}" if item.location else ""
                 orig_html = f'<div style="color: #94a3b8; font-size: 13px; text-decoration: line-through;">R$ {item.original_price:.2f}</div>' if item.original_price else ''
                 disc_html = f'<span class="discount-pill">-{item.discount_pct}% OFF</span>' if item.discount_pct else ''
 
@@ -305,7 +543,7 @@ with tab1:
                                 {badge_text}
                             </span>
                             <span style="color: #94a3b8; font-size: 13px; margin-left: 10px;">
-                                🏪 {item.store} ({store_kind}){loc_label}
+                                🏪 {item.store} (Varejo Online)
                             </span>
                             <h3 style="margin: 8px 0 4px 0; color: #f8fafc; font-size: 18px;">{item.title}</h3>
                         </div>
@@ -319,49 +557,46 @@ with tab1:
                 """).strip()
 
                 st.markdown(card_html, unsafe_allow_html=True)
-                c_link, _ = st.columns([1.5, 4])
+                c_link, _ = st.columns([2, 3])
                 with c_link:
-                    st.link_button("👉 Ir para Oferta", item.url, use_container_width=True)
+                    st.link_button(f"👉 Ir para Loja Oficial ({item.store})", item.url, use_container_width=True)
 
-        # Botão para colocar esse produto em monitoramento contínuo
-        st.markdown("---")
-        st.subheader("📌 Deseja monitorar este produto automaticamente?")
-        col_t1, col_t2, col_t3 = st.columns([3, 1.5, 2])
-        with col_t1:
-            prod_name = st.text_input("Nome do Produto Alvo:", value=res.get("query"), key="track_name_input")
-        with col_t2:
-            drop_target = st.number_input("Alertar se cair >= (%)", min_value=1.0, max_value=80.0, value=10.0, step=1.0)
-        with col_t3:
-            st.write("")
-            st.write("")
-            if st.button("➕ Monitorar e Gravar no Banco", type="primary", use_container_width=True):
-                with get_db() as db:
-                    # Verifica se já existe
-                    existing = db.query(TrackedProduct).filter(TrackedProduct.name.ilike(prod_name)).first()
-                    if existing:
-                        st.info(f"O produto '{prod_name}' já está cadastrado para monitoramento.")
-                    else:
-                        new_prod = TrackedProduct(
-                            name=prod_name,
-                            niche=niche_option if niche_option != "Personalizado" else "Geral",
-                            target_drop_pct=drop_target,
-                            last_best_price=top_prices[0].price if top_prices else 0.0,
-                            user_cep=user_cep,
-                            user_city=user_city,
-                            user_state=user_state,
-                            active=True
-                        )
-                        db.add(new_prod)
-                        db.commit()
-                        
-                        # Processa e grava top 3 histórico inicial
-                        scraper_manager.process_and_persist_tracked_product(new_prod.id, res)
-                        st.success(f"✅ '{prod_name}' cadastrado com sucesso! Top 3 preços históricos gravados no banco.")
+            # Monitorar
+            st.markdown("---")
+            st.subheader("📌 Deseja monitorar este bem de consumo?")
+            col_tv1, col_tv2, col_tv3 = st.columns([3, 1.5, 2])
+            with col_tv1:
+                prod_v_name = st.text_input("Nome do Produto Alvo:", value=res_v.get("query"), key="track_v_name_input")
+            with col_tv2:
+                drop_v_target = st.number_input("Alertar se cair >= (%)", min_value=1.0, max_value=80.0, value=10.0, step=1.0, key="track_v_drop")
+            with col_tv3:
+                st.write("")
+                st.write("")
+                if st.button("➕ Monitorar Varejo no Banco", type="primary", use_container_width=True, key="btn_track_v"):
+                    with get_db() as db:
+                        existing = db.query(TrackedProduct).filter(TrackedProduct.name.ilike(prod_v_name)).first()
+                        if existing:
+                            st.info(f"O produto '{prod_v_name}' já está cadastrado para monitoramento.")
+                        else:
+                            new_prod = TrackedProduct(
+                                name=prod_v_name,
+                                niche="Bens de Consumo",
+                                target_drop_pct=drop_v_target,
+                                last_best_price=top_v[0].price if top_v else 0.0,
+                                user_cep=user_cep,
+                                user_city=user_city,
+                                user_state=user_state,
+                                active=True
+                            )
+                            db.add(new_prod)
+                            db.commit()
+                            scraper_manager.process_and_persist_tracked_product(new_prod.id, res_v)
+                            st.success(f"✅ '{prod_v_name}' cadastrado! Monitoramento ativo.")
 
 # -------------------------------------------------------------
-# ABA 2: PRODUTOS MONITORADOS & TOP 3 HISTÓRICO
+# ABA 3: PRODUTOS MONITORADOS & TOP 3 HISTÓRICO
 # -------------------------------------------------------------
-with tab2:
+with tab_monitor:
     st.subheader("📊 Produtos em Monitoramento Ativo")
     st.caption("O Radar Julius armazena os 3 menores preços de todos os tempos de cada produto e a data exata da captura para fins de comparação.")
 
@@ -449,9 +684,9 @@ with tab2:
                     st.dataframe(df_caps, use_container_width=True)
 
 # -------------------------------------------------------------
-# ABA 3: MONITORAMENTO AUTOMÁTICO EM BACKGROUND
+# ABA 4: MONITORAMENTO AUTOMÁTICO EM BACKGROUND
 # -------------------------------------------------------------
-with tab3:
+with tab_scan:
     st.subheader("⏱️ Configuração do Monitor Automático")
     st.markdown("""
     O serviço de monitoramento roda em background (com **APScheduler**), varrendo periodicamente os preços de todos os produtos ativos cadastrados.
@@ -484,9 +719,9 @@ with tab3:
             st.success(f"Intervalo ajustado para {new_interval} minutos!")
 
 # -------------------------------------------------------------
-# ABA 4: INTEGRAÇÃO n8n (WHATSAPP E E-MAIL)
+# ABA 5: INTEGRAÇÃO n8n (WHATSAPP E E-MAIL)
 # -------------------------------------------------------------
-with tab4:
+with tab_n8n:
     st.subheader("⚡ Integração com n8n para Disparo de Notificações")
     st.markdown("""
     O Radar Julius é projetado para integração desacoplada com o **n8n**.
@@ -536,9 +771,9 @@ with tab4:
         st.code(mock_payload, language="json")
 
 # -------------------------------------------------------------
-# ABA 5: GEOLOCALIZAÇÃO & MERCADOS PRÓXIMOS
+# ABA 6: GEOLOCALIZAÇÃO & MERCADOS PRÓXIMOS
 # -------------------------------------------------------------
-with tab5:
+with tab_geo:
     st.subheader(f"📍 Redes de Mercados Disponíveis para {user_city} - {user_state}")
     available_markets = get_available_supermarkets_for_location(user_state, user_city)
 
