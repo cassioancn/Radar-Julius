@@ -273,15 +273,17 @@ with tab1:
         stats = res.get("stats", {})
         top_prices = res.get("top_prices", [])
 
-        st.markdown("---")
-        # Banner de Métricas de Economia
-        col_m1, col_m2, col_m3, col_m4 = st.columns(4)
-        col_m1.metric("Menor Preço Encontrado", f"R$ {stats.get('min_price', 0.0):.2f}")
-        col_m2.metric("Preço Mais Alto", f"R$ {stats.get('max_price', 0.0):.2f}")
-        col_m3.metric("Preço Médio", f"R$ {stats.get('avg_price', 0.0):.2f}")
-        col_m4.metric("Economia Potencial", f"R$ {stats.get('potential_savings', 0.0):.2f}", delta=f"{round((stats.get('potential_savings', 0)/(stats.get('max_price', 1) or 1))*100, 1)}% menos")
+        if not top_prices:
+            st.warning(f"⚠️ Nenhuma oferta online encontrada para \"{res.get('query')}\" nas lojas consultadas. Tente pesquisar por um termo mais direto (ex: 'queijo', 'arroz', 'cerveja') ou marque outros filtros.")
+        else:
+            # Banner de Métricas de Economia
+            col_m1, col_m2, col_m3, col_m4 = st.columns(4)
+            col_m1.metric("Menor Preço Encontrado", f"R$ {stats.get('min_price', 0.0):.2f}")
+            col_m2.metric("Preço Mais Alto", f"R$ {stats.get('max_price', 0.0):.2f}")
+            col_m3.metric("Preço Médio", f"R$ {stats.get('avg_price', 0.0):.2f}")
+            col_m4.metric("Economia Potencial", f"R$ {stats.get('potential_savings', 0.0):.2f}", delta=f"{round((stats.get('potential_savings', 0)/(stats.get('max_price', 1) or 1))*100, 1)}% menos")
 
-        st.subheader(f"🏆 Top 5 Melhores Preços para \"{res.get('query')}\"")
+            st.subheader(f"🏆 Top 5 Melhores Preços para \"{res.get('query')}\"")
 
         for idx, item in enumerate(top_prices, start=1):
             is_top1 = (idx == 1)

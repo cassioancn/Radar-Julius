@@ -4,10 +4,15 @@ from bs4 import BeautifulSoup
 from ..base import BaseScraper, ProductItem, parse_price_brl
 
 class MagaluScraper(BaseScraper):
-    """Scraper para Magazine Luiza."""
+    """Scraper para Magazine Luiza (apenas dados 100% reais)."""
 
     def __init__(self):
         super().__init__(store_name="Magalu", store_type="retail")
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "pt-BR,pt;q=0.9"
+        })
 
     def search(self, query: str, limit: int = 10, **kwargs) -> List[ProductItem]:
         items: List[ProductItem] = []
@@ -57,39 +62,4 @@ class MagaluScraper(BaseScraper):
         except Exception:
             pass
 
-        if not items:
-            items = self._generate_fallback_items(query, limit)
-
         return items[:limit]
-
-    def _generate_fallback_items(self, query: str, limit: int) -> List[ProductItem]:
-        base_price = 30.00
-        q_lower = query.lower()
-        if "arroz" in q_lower:
-            base_price = 27.90
-        elif "tv" in q_lower or "smart" in q_lower:
-            base_price = 1879.00
-        elif "playstation" in q_lower or "ps5" in q_lower:
-            base_price = 3480.00
-        elif "iphone" in q_lower:
-            base_price = 2520.00
-        elif "cerveja" in q_lower:
-            base_price = 4.99
-        elif "azeite" in q_lower:
-            base_price = 41.50
-        elif "fralda" in q_lower:
-            base_price = 69.00
-
-        return [
-            ProductItem(
-                title=f"{query.title()} no Magalu",
-                price=round(base_price * 0.95, 2),
-                original_price=round(base_price, 2),
-                discount_pct=5.0,
-                store=self.store_name,
-                store_type=self.store_type,
-                url=f"https://www.magazineluiza.com.br/busca/{urllib.parse.quote(query)}/",
-                image_url="https://s.magalu.com/assets/images/logo-magalu.png"
-            )
-        ][:limit]
-

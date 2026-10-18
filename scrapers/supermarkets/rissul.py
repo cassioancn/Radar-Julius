@@ -1,61 +1,74 @@
 import urllib.parse
 from typing import List, Optional
+import requests
 from ..base import BaseScraper, ProductItem
 
 class RissulScraper(BaseScraper):
-    """Scraper para Super Rissul (Grupo Unidasul - RS)."""
+    """Scraper com integração à API oficial VTEX do Super Rissul (Grupo Unidasul - RS)."""
 
     def __init__(self):
         super().__init__(store_name="Super Rissul", store_type="supermarket")
+        self.session.headers.update({
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+            "Accept": "application/json, text/plain, */*",
+            "Accept-Language": "pt-BR,pt;q=0.9"
+        })
 
     def search(self, query: str, limit: int = 10, city: Optional[str] = None, uf: Optional[str] = "RS", **kwargs) -> List[ProductItem]:
         items: List[ProductItem] = []
         loc = f"{city} - {uf}" if city else "RS (Grande POA / Serra)"
 
-        base_price = 26.90
-        q = query.lower()
-        if "arroz" in q:
-            base_price = 24.90
-        elif "feijão" in q or "feijao" in q:
-            base_price = 7.89
-        elif "óleo" in q or "oleo" in q:
-            base_price = 6.19
-        elif "cerveja" in q:
-            base_price = 4.19
-        elif "leite" in q:
-            base_price = 4.49
-        elif "detergente" in q:
-            base_price = 2.29
-        elif "azeite" in q:
-            base_price = 36.90
-        elif "fralda" in q:
-            base_price = 62.90
-        elif "picanha" in q or "carne" in q:
-            base_price = 64.90
-
         encoded = urllib.parse.quote(query)
-        items.append(ProductItem(
-            title=f"{query.title()} - Oferta Cartão Rissul",
-            price=round(base_price * 0.88, 2),
-            original_price=round(base_price, 2),
-            discount_pct=12.0,
-            store=self.store_name,
-            store_type=self.store_type,
-            url=f"https://www.rissul.com.br/encartes?busca={encoded}",
-            location=loc,
-            image_url="https://www.rissul.com.br/assets/images/logo-rissul.svg"
-        ))
-        items.append(ProductItem(
-            title=f"{query.title()} - Preço de Gôndola",
-            price=round(base_price, 2),
-            original_price=round(base_price * 1.06, 2),
-            discount_pct=5.7,
-            store=self.store_name,
-            store_type=self.store_type,
-            url=f"https://www.rissul.com.br/encartes?busca={encoded}",
-            location=loc,
-            image_url="https://www.rissul.com.br/assets/images/logo-rissul.svg"
-        ))
+        url = f"https://www.rissul.com.br/api/catalog_system/pub/products/search?ft={encoded}"
 
-        return items[:limit]
+        try:
+            resp = self.session.get(url, timeout=7)
+            if resp.status_code in [200, 206]:
+                data = resp.json()
+                if isinstance(data, list):
+                    for p in data[:limit * 2]:
+                        name = p.get("productName")
+                        link = p.get("link")
+                        prod_items = p.get("items", [])
+                        
+                        if not name or not prod_items:
+                            continue
 
+                        price = None
+                        orig_price = None
+                        sellers = prod_items[0].get("sellers", [])
+                        if sellers:
+                            comm = sellers[0].get("commertialOffer", {})
+                            price = comm.get("Price")
+                            orig_price = comm.get("ListPrice")
+
+                        if not price or float(price) <= 0:
+                            continue
+
+                        images = prod_items[0].get("images", [])
+                        img_url = images[0].get("imageUrl") if images else ""
+
+                        public_link = link or (f"https://www.rissul.com.br/{p.get('linkText')}/p" if p.get("linkText") else "")
+
+                        price_val = round(float(price), 2)
+                        orig_val = round(float(orig_price), 2) if orig_price and float(orig_price) > price_val else None
+                        disc_pct = round(((orig_val - price_val) / orig_val) * 100, 1) if orig_val else None
+
+                        items.append(ProductItem(
+                            title=name,
+                            price=price_val,
+                            original_price=orig_val,
+                            discount_pct=disc_pct,
+                            store=self.store_name,
+                            store_type=self.store_type,
+                            url=public_link,
+                            image_url=img_url,
+                            location=loc
+                        ))
+
+                        if len(items) >= limit:
+                            break
+        except Exception:
+            pass
+
+        return items

@@ -4,7 +4,7 @@ from bs4 import BeautifulSoup
 from ..base import BaseScraper, ProductItem, parse_price_brl
 
 class AmazonScraper(BaseScraper):
-    """Scraper para Amazon Brasil com tratamento de headers e seletores padrão."""
+    """Scraper para Amazon Brasil (apenas dados 100% reais extraídos da página)."""
 
     def __init__(self):
         super().__init__(store_name="Amazon Brasil", store_type="retail")
@@ -31,11 +31,9 @@ class AmazonScraper(BaseScraper):
                         continue
                     title = title_el.get_text(strip=True)
 
-                    # Link
                     link_el = item.select_one("h2 a")
                     link = f"https://www.amazon.com.br{link_el['href']}" if link_el and link_el.has_attr("href") else url
 
-                    # Preço
                     whole = item.select_one(".a-price-whole")
                     fraction = item.select_one(".a-price-fraction")
                     if not whole:
@@ -48,7 +46,6 @@ class AmazonScraper(BaseScraper):
                     if not price or price <= 0:
                         continue
 
-                    # Preço base / cortado
                     strike = item.select_one(".a-text-price .a-offscreen")
                     orig_price = parse_price_brl(strike.get_text(strip=True)) if strike else None
                     
@@ -56,7 +53,6 @@ class AmazonScraper(BaseScraper):
                     if orig_price and orig_price > price:
                         discount_pct = round(((orig_price - price) / orig_price) * 100, 1)
 
-                    # Imagem
                     img_el = item.select_one("img.s-image")
                     img_url = img_el.get("src") if img_el else ""
 
@@ -76,39 +72,5 @@ class AmazonScraper(BaseScraper):
         except Exception:
             pass
 
-        if not items:
-            items = self._generate_fallback_items(query, limit)
-
+        # Sem dados inventados
         return items[:limit]
-
-    def _generate_fallback_items(self, query: str, limit: int) -> List[ProductItem]:
-        base_price = 29.50
-        q_lower = query.lower()
-        if "arroz" in q_lower:
-            base_price = 27.20
-        elif "tv" in q_lower or "smart" in q_lower:
-            base_price = 1949.00
-        elif "playstation" in q_lower or "ps5" in q_lower:
-            base_price = 3499.00
-        elif "iphone" in q_lower or "celular" in q_lower:
-            base_price = 2590.00
-        elif "cerveja" in q_lower:
-            base_price = 5.10
-        elif "azeite" in q_lower:
-            base_price = 42.00
-        elif "fralda" in q_lower:
-            base_price = 69.90
-
-        return [
-            ProductItem(
-                title=f"{query.title()} - Amazon Prime Entrega Grátis",
-                price=round(base_price * 0.96, 2),
-                original_price=round(base_price * 1.08, 2),
-                discount_pct=11.0,
-                store=self.store_name,
-                store_type=self.store_type,
-                url=f"https://www.amazon.com.br/s?k={urllib.parse.quote(query)}",
-                image_url="https://m.media-amazon.com/images/G/32/social_share/amazon_logo._CB633266945_.png"
-            )
-        ][:limit]
-

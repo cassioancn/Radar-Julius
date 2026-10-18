@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Optional
 import concurrent.futures
 
 from .base import ProductItem
-from .retail import MercadoLivreScraper, AmazonScraper, MagaluScraper, ShopeeScraper
+from .retail import BuscapeScraper, MercadoLivreScraper, AmazonScraper, MagaluScraper, ShopeeScraper
 from .supermarkets import AtacadaoScraper, MacromixScraper, RissulScraper, StockCenterScraper
 from database.db import get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice
@@ -14,6 +14,7 @@ class ScraperManager:
 
     def __init__(self):
         self.retail_scrapers = [
+            BuscapeScraper(),
             MercadoLivreScraper(),
             AmazonScraper(),
             MagaluScraper(),
@@ -21,8 +22,8 @@ class ScraperManager:
         ]
         self.supermarket_scrapers = [
             AtacadaoScraper(),
-            MacromixScraper(),
             RissulScraper(),
+            MacromixScraper(),
             StockCenterScraper()
         ]
 
