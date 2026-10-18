@@ -1,4 +1,5 @@
 import os
+import textwrap
 from pathlib import Path
 import streamlit as st
 import pandas as pd
@@ -288,33 +289,38 @@ with tab1:
             card_class = "price-card top-1-card" if is_top1 else "price-card"
             
             with st.container():
-                st.markdown(f"""
+                badge_color = "#22c55e" if is_top1 else "#3b82f6"
+                badge_text = "🥇 1º CAMPEÃO DO PREÇO BAIXO" if is_top1 else f"#{idx} Menor Preço"
+                store_kind = "Supermercado / Atacado" if item.store_type == "supermarket" else "Varejo Online"
+                loc_label = f" • 📍 {item.location}" if item.location else ""
+                orig_html = f'<div style="color: #94a3b8; font-size: 13px; text-decoration: line-through;">R$ {item.original_price:.2f}</div>' if item.original_price else ''
+                disc_html = f'<span class="discount-pill">-{item.discount_pct}% OFF</span>' if item.discount_pct else ''
+
+                card_html = textwrap.dedent(f"""
                 <div class="{card_class}">
                     <div style="display: flex; justify-content: space-between; align-items: flex-start;">
                         <div>
-                            <span class="julius-badge" style="background-color: {'#22c55e' if is_top1 else '#3b82f6'}; color: white;">
-                                {'🥇 1º CAMPEÃO DO PREÇO BAIXO' if is_top1 else f'#{idx} Menor Preço'}
+                            <span class="julius-badge" style="background-color: {badge_color}; color: white;">
+                                {badge_text}
                             </span>
                             <span style="color: #94a3b8; font-size: 13px; margin-left: 10px;">
-                                🏪 {item.store} ({'Supermercado / Atacado' if item.store_type == 'supermarket' else 'Varejo Online'})
-                                {' • 📍 ' + item.location if item.location else ''}
+                                🏪 {item.store} ({store_kind}){loc_label}
                             </span>
                             <h3 style="margin: 8px 0 4px 0; color: #f8fafc; font-size: 18px;">{item.title}</h3>
                         </div>
-                        <div style="text-align: right;">
+                        <div style="text-align: right; min-width: 140px;">
                             <span class="price-tag">R$ {item.price:.2f}</span>
-                            {f'<div style="color: #94a3b8; font-size: 13px; text-decoration: line-through;">R$ {item.original_price:.2f}</div>' if item.original_price else ''}
-                            {f'<span class="discount-pill">-{item.discount_pct}% OFF</span>' if item.discount_pct else ''}
+                            {orig_html}
+                            {disc_html}
                         </div>
                     </div>
                 </div>
-                """, unsafe_allow_html=True)
-                
-                c_link, c_track = st.columns([1, 4])
+                """).strip()
+
+                st.markdown(card_html, unsafe_allow_html=True)
+                c_link, _ = st.columns([1.5, 4])
                 with c_link:
                     st.link_button("👉 Ir para Oferta", item.url, use_container_width=True)
-                with c_track:
-                    pass
 
         # Botão para colocar esse produto em monitoramento contínuo
         st.markdown("---")
@@ -419,14 +425,16 @@ with tab2:
                     ranks_labels = ["🥇 1º Menor Preço de Todos os Tempos", "🥈 2º Menor Preço Histórico", "🥉 3º Menor Preço Histórico"]
                     for idx, h in enumerate(p["historical_tops"]):
                         with h_cols[idx]:
-                            st.markdown(f"""
+                            cap_date = h['captured_at'].strftime('%d/%m/%Y às %H:%M') if h['captured_at'] else ''
+                            h_html = textwrap.dedent(f"""
                             <div style="background-color: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155; text-align: center;">
                                 <div style="font-size: 13px; font-weight: bold; color: #38bdf8;">{ranks_labels[idx]}</div>
                                 <div style="font-size: 24px; font-weight: bold; color: #22c55e; margin: 6px 0;">R$ {h['price']:.2f}</div>
                                 <div style="font-size: 13px; color: #cbd5e1;">🏪 {h['store_name']}</div>
-                                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">📅 {h['captured_at'].strftime('%d/%m/%Y às %H:%M') if h['captured_at'] else ''}</div>
+                                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">📅 {cap_date}</div>
                             </div>
-                            """, unsafe_allow_html=True)
+                            """).strip()
+                            st.markdown(h_html, unsafe_allow_html=True)
                 else:
                     st.info("Ainda não há histórico consolidado.")
 
@@ -535,7 +543,9 @@ with tab5:
 
     for m in available_markets:
         with st.container():
-            st.markdown(f"""
+            m_badge_color = "#22c55e" if m['is_direct_city_match'] else "#64748b"
+            m_badge_text = "📍 Unidade Direta na Cidade" if m['is_direct_city_match'] else "🚚 Atende a Região"
+            m_html = textwrap.dedent(f"""
             <div class="price-card">
                 <div style="display: flex; justify-content: space-between; align-items: center;">
                     <div>
@@ -544,11 +554,12 @@ with tab5:
                         <span style="font-size: 12px; color: #38bdf8;">🌐 Cobertura: {m['coverage']}</span>
                     </div>
                     <div>
-                        <span class="julius-badge" style="background-color: {'#22c55e' if m['is_direct_city_match'] else '#64748b'}; color: white;">
-                            {'📍 Unidade Direta na Cidade' if m['is_direct_city_match'] else '🚚 Atende a Região'}
+                        <span class="julius-badge" style="background-color: {m_badge_color}; color: white;">
+                            {m_badge_text}
                         </span>
                     </div>
                 </div>
             </div>
-            """, unsafe_allow_html=True)
+            """).strip()
+            st.markdown(m_html, unsafe_allow_html=True)
 
