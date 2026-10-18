@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -91,7 +92,15 @@ st.markdown("""
 
 # Barra lateral com Perfil e Geolocalização
 with st.sidebar:
-    st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=70)
+    julius_root = Path(__file__).resolve().parent / "julius.png"
+    julius_assets = Path(__file__).resolve().parent / "assets" / "julius.jpg"
+    
+    if julius_root.exists():
+        st.image(str(julius_root), use_container_width=True)
+    elif julius_assets.exists():
+        st.image(str(julius_assets), use_container_width=True)
+    else:
+        st.image("https://cdn-icons-png.flaticon.com/512/3135/3135715.png", width=70)
     st.title("🎯 Radar Julius")
     st.caption("Onde cada centavo conta!")
     
