@@ -11,7 +11,7 @@ load_dotenv()
 from database.db import init_db, get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice, NotificationLog
 from scrapers.manager import ScraperManager
-from geo.locator import get_location_from_cep, get_available_supermarkets_for_location
+from geo.locator import get_location_from_cep, get_available_supermarkets_for_location, clean_cep
 from notifications.n8n_dispatcher import dispatch_price_drop_alert, test_n8n_connection, get_julius_quote
 from services.monitor_service import get_monitor_instance
 
@@ -106,15 +106,72 @@ with st.sidebar:
     
     st.markdown("---")
     st.subheader("📍 Sua Localização")
-    user_cep = st.text_input("Seu CEP:", value=os.getenv("DEFAULT_USER_CEP", "93010000"), help="Usado para localizar estoques e preços nos mercados próximos.")
-    
-    loc_info = get_location_from_cep(user_cep)
-    user_city = "São Leopoldo"
-    user_state = "RS"
-    if loc_info:
-        user_city = loc_info.get("localidade", "São Leopoldo")
-        user_state = loc_info.get("uf", "RS")
-        st.success(f"📌 {user_city} - {user_state}")
+
+    # Inicialização segura na sessão
+    if "user_cep" not in st.session_state:
+        st.session_state["user_cep"] = "93280475"
+    if "user_city" not in st.session_state:
+        st.session_state["user_city"] = "Esteio"
+    if "user_state" not in st.session_state:
+        st.session_state["user_state"] = "RS"
+    if "user_neighborhood" not in st.session_state:
+        st.session_state["user_neighborhood"] = "Olímpica"
+
+    def handle_cep_update(novo_cep: str):
+        if not novo_cep:
+            return
+        loc_res = get_location_from_cep(novo_cep)
+        if loc_res and loc_res.get("localidade"):
+            st.session_state["user_cep"] = loc_res["cep"]
+            st.session_state["user_city"] = loc_res["localidade"]
+            st.session_state["user_state"] = loc_res["uf"]
+            st.session_state["user_neighborhood"] = loc_res.get("bairro", "")
+            st.session_state["cep_msg"] = ("success", f"📌 {loc_res['localidade']} - {loc_res['uf']}" + (f" ({loc_res['bairro']})" if loc_res.get("bairro") else ""))
+        else:
+            st.session_state["cep_msg"] = ("error", "⚠️ CEP não localizado na base dos Correios.")
+
+    c_input_col, c_btn_col = st.columns([2.5, 1.2])
+    with c_input_col:
+        input_cep = st.text_input(
+            "Seu CEP:",
+            value=st.session_state["user_cep"],
+            key="input_cep_field",
+            help="Digite seu CEP com ou sem traço e clique em Buscar ou pressione Enter."
+        )
+    with c_btn_col:
+        st.write("")
+        st.write("")
+        if st.button("🔍 Buscar", use_container_width=True):
+            handle_cep_update(input_cep)
+            st.rerun()
+
+    # Se o valor no campo de texto for diferente do gravado, atualiza
+    if input_cep and clean_cep(input_cep) != clean_cep(st.session_state["user_cep"]):
+        handle_cep_update(input_cep)
+        st.rerun()
+
+    user_city = st.session_state["user_city"]
+    user_state = st.session_state["user_state"]
+    user_neighborhood = st.session_state.get("user_neighborhood", "")
+    user_cep = st.session_state["user_cep"]
+
+    if "cep_msg" in st.session_state:
+        msg_type, msg_text = st.session_state["cep_msg"]
+        if msg_type == "success":
+            st.success(msg_text)
+        else:
+            st.warning(msg_text)
+    else:
+        st.success(f"📌 {user_city} - {user_state}" + (f" ({user_neighborhood})" if user_neighborhood else ""))
+
+    with st.expander("✏️ Ajustar Cidade Manualmente", expanded=False):
+        m_city = st.text_input("Nome da Cidade:", value=user_city, key="m_city_key")
+        m_state = st.text_input("UF (Estado):", value=user_state, key="m_state_key")
+        if st.button("Salvar Local Manual", use_container_width=True):
+            st.session_state["user_city"] = m_city.strip()
+            st.session_state["user_state"] = m_state.strip().upper()
+            st.session_state["cep_msg"] = ("success", f"📌 {m_city.strip()} - {m_state.strip().upper()} (Manual)")
+            st.rerun()
     
     st.markdown("---")
     st.subheader("⚙️ Monitor em Segundo Plano")
