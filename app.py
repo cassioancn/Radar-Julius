@@ -31,15 +31,22 @@ init_db()
 scraper_manager = ScraperManager()
 monitor = get_monitor_instance()
 
-# CSS Customizado com tema Julius
+# CSS Customizado com tema Julius e Responsividade Mobile
 st.markdown("""
 <style>
+    /* Estilos Gerais */
     .main-header {
         background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-        padding: 24px;
+        padding: 22px 24px;
         border-radius: 12px;
         border-left: 6px solid #22c55e;
-        margin-bottom: 24px;
+        margin-bottom: 18px;
+    }
+    .main-header-content {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
     }
     .julius-badge {
         background-color: #22c55e;
@@ -49,6 +56,10 @@ st.markdown("""
         border-radius: 6px;
         font-size: 13px;
         display: inline-block;
+        white-space: nowrap;
+    }
+    .mobile-loc-bar {
+        display: none;
     }
     .quote-box {
         background-color: #1e293b;
@@ -62,10 +73,10 @@ st.markdown("""
     .price-card {
         background-color: #1e293b;
         border: 1px solid #334155;
-        border-radius: 10px;
+        border-radius: 12px;
         padding: 16px;
         margin-bottom: 12px;
-        transition: transform 0.2s ease;
+        transition: transform 0.2s ease, border-color 0.2s ease;
     }
     .price-card:hover {
         border-color: #22c55e;
@@ -75,10 +86,48 @@ st.markdown("""
         border: 2px solid #22c55e !important;
         background-color: #064e3b22;
     }
+    .card-body {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        flex-wrap: wrap;
+        gap: 12px;
+    }
+    .card-info {
+        flex: 1;
+        min-width: 240px;
+    }
+    .card-pricing {
+        text-align: right;
+        min-width: 130px;
+    }
+    .product-title {
+        margin: 8px 0 6px 0;
+        color: #f8fafc;
+        font-size: 18px;
+        line-height: 1.35;
+    }
+    .store-badge-sub {
+        color: #94a3b8;
+        font-size: 13px;
+        margin-left: 8px;
+    }
+    .pack-sub {
+        color: #94a3b8;
+        font-size: 12px;
+        margin-top: 2px;
+    }
+    .badges-row {
+        margin-top: 6px;
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+    }
     .price-tag {
         font-size: 26px;
         font-weight: 800;
         color: #22c55e;
+        line-height: 1;
     }
     .discount-pill {
         background-color: #b91c1c;
@@ -106,6 +155,167 @@ st.markdown("""
         border-radius: 6px;
         font-size: 12px;
         display: inline-block;
+    }
+
+    /* Abas Touch-Friendly */
+    div[data-baseweb="tab-list"] {
+        gap: 6px !important;
+        border-bottom: 1px solid #334155 !important;
+        padding-bottom: 2px !important;
+    }
+    button[data-baseweb="tab"] {
+        border-radius: 8px 8px 0 0 !important;
+        font-size: 14px !important;
+        padding: 10px 14px !important;
+        font-weight: 600 !important;
+        white-space: nowrap !important;
+    }
+
+    /* ======================================================== */
+    /* REGRAS ESPECÍFICAS PARA SMARTPHONES E TELAS PEQUENAS     */
+    /* ======================================================== */
+    @media (max-width: 768px) {
+        /* Redução de margens e padding lateral para aproveitar a tela */
+        .block-container {
+            padding-top: 1rem !important;
+            padding-bottom: 2rem !important;
+            padding-left: 0.75rem !important;
+            padding-right: 0.75rem !important;
+            max-width: 100% !important;
+        }
+
+        /* Prevenção de auto-zoom no iOS Safari em campos de texto */
+        input, select, textarea {
+            font-size: 16px !important;
+        }
+
+        /* Botões com altura mínima ergonômica para toque */
+        button[kind="primary"], button[kind="secondary"], .stButton > button {
+            min-height: 46px !important;
+            font-size: 15px !important;
+            border-radius: 8px !important;
+        }
+        div[data-testid="stLinkButton"] > a {
+            min-height: 46px !important;
+            font-size: 15px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            border-radius: 8px !important;
+        }
+
+        /* Cabeçalho compacto em smartphones */
+        .main-header {
+            padding: 14px 16px !important;
+            margin-bottom: 10px !important;
+            border-left-width: 4px !important;
+        }
+        .main-header-content {
+            flex-direction: column !important;
+            align-items: flex-start !important;
+            gap: 8px !important;
+        }
+        .main-header h1 {
+            font-size: 20px !important;
+            line-height: 1.25 !important;
+        }
+        .main-header p {
+            font-size: 12px !important;
+            line-height: 1.4 !important;
+        }
+
+        /* Barra de Localização para Mobile (já que o sidebar fica oculto) */
+        .mobile-loc-bar {
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            border-radius: 8px !important;
+            padding: 8px 12px !important;
+            margin-bottom: 12px !important;
+            font-size: 13px !important;
+            color: #f1f5f9 !important;
+        }
+
+        /* Abas com rolagem horizontal suave no celular */
+        div[data-baseweb="tab-list"] {
+            overflow-x: auto !important;
+            -webkit-overflow-scrolling: touch !important;
+            scrollbar-width: none !important;
+            gap: 4px !important;
+            padding-bottom: 4px !important;
+        }
+        div[data-baseweb="tab-list"]::-webkit-scrollbar {
+            display: none !important;
+        }
+        button[data-baseweb="tab"] {
+            font-size: 12.5px !important;
+            padding: 8px 11px !important;
+            min-height: 42px !important;
+        }
+
+        /* Grade 2x2 para os 4 Cards de Métricas de Economia */
+        div[data-testid="stHorizontalBlock"]:has(div[data-testid="stMetric"]) {
+            display: grid !important;
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 8px !important;
+        }
+        div[data-testid="stMetric"] {
+            background: #1e293b !important;
+            border: 1px solid #334155 !important;
+            border-radius: 10px !important;
+            padding: 8px 10px !important;
+            min-width: 0 !important;
+        }
+        div[data-testid="stMetricLabel"] p {
+            font-size: 11px !important;
+            color: #94a3b8 !important;
+            white-space: nowrap !important;
+            overflow: hidden !important;
+            text-overflow: ellipsis !important;
+        }
+        div[data-testid="stMetricValue"] {
+            font-size: 17px !important;
+            font-weight: 800 !important;
+        }
+
+        /* Card de Produto Mobile */
+        .price-card {
+            padding: 12px 14px !important;
+            margin-bottom: 10px !important;
+        }
+        .card-body {
+            flex-direction: column !important;
+            gap: 6px !important;
+        }
+        .card-info {
+            width: 100% !important;
+            min-width: 100% !important;
+        }
+        .product-title {
+            font-size: 16px !important;
+            margin: 6px 0 !important;
+        }
+        .store-badge-sub {
+            display: block !important;
+            margin-left: 0 !important;
+            margin-top: 4px !important;
+            font-size: 12px !important;
+        }
+        .card-pricing {
+            width: 100% !important;
+            display: flex !important;
+            justify-content: space-between !important;
+            align-items: center !important;
+            padding-top: 8px !important;
+            margin-top: 6px !important;
+            border-top: 1px dashed #334155 !important;
+            text-align: left !important;
+        }
+        .price-tag {
+            font-size: 22px !important;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -208,31 +418,39 @@ with st.sidebar:
     st.markdown("---")
     st.caption(f"💡 *\"{get_julius_quote(25.0)}\"*")
 
-# Cabeçalho Principal
+# Cabeçalho Principal com suporte a Mobile
 st.markdown(f"""
 <div class="main-header">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
+    <div class="main-header-content">
         <div>
-            <h1 style="margin: 0; color: #f8fafc; font-size: 28px;">🎯 Radar Julius - Comparador & Monitor de Preços</h1>
-            <p style="margin: 5px 0 0 0; color: #94a3b8; font-size: 15px;">
-                Varredura em tempo real no Varejo (Amazon, Mercado Livre, Shopee, Magalu) e Mercados (Atacadão, Macromix, Rissul, Stock Center).
+            <h1 style="margin: 0; color: #f8fafc; font-size: 26px;">🎯 Radar Julius - Preços & Economia</h1>
+            <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 14px;">
+                Varredura em tempo real no Varejo e Mercados da sua região ({user_city} - {user_state}).
             </p>
         </div>
-        <div style="text-align: right;">
+        <div>
             <span class="julius-badge">MODO ECONOMIA ATIVADO</span>
         </div>
     </div>
 </div>
+<div class="mobile-loc-bar">
+    <div>
+        📍 <strong>{user_city} - {user_state}</strong>{f' ({user_neighborhood})' if user_neighborhood else ''}
+    </div>
+    <div style="font-size: 11px; color: #38bdf8;">
+        Alterar CEP na barra lateral ☰
+    </div>
+</div>
 """, unsafe_allow_html=True)
 
-# Abas Principais
+# Abas Principais (Rótulos Otimizados para Mobile e Desktop)
 tab_mercado, tab_varejo, tab_monitor, tab_scan, tab_n8n, tab_geo = st.tabs([
-    "🛒 Mercado (Alimentos & Supermercado)",
-    "📺 Bens de Consumo (Eletrônicos & Varejo)",
-    "📊 Produtos Monitorados & Top 3 Histórico",
-    "⏱️ Varredura & Monitoramento",
-    "⚡ Integração n8n (WhatsApp / E-mail)",
-    "📍 Mercados & Geolocalização"
+    "🛒 Mercado",
+    "📺 Bens de Consumo",
+    "📊 Monitorados",
+    "⏱️ Varredura",
+    "⚡ n8n Alertas",
+    "📍 Mercados"
 ])
 
 # -------------------------------------------------------------
@@ -311,13 +529,13 @@ with tab_mercado:
         sort_mode = st.radio(
             "Critério de Ranqueamento:",
             [
-                "🏆 Melhor Custo-Benefício por Unidade (Recomendado)",
-                "📦 Menor Preço Total da Embalagem"
+                "🏆 Custo-Benefício (por kg/L/un)",
+                "📦 Preço Total da Embalagem"
             ],
             horizontal=True,
             key="mercado_sort_mode"
         )
-        sort_by_unit = ("Melhor Custo-Benefício" in sort_mode)
+        sort_by_unit = ("Custo-Benefício" in sort_mode)
 
     with col_u3:
         filter_unit_match = st.checkbox(
@@ -386,34 +604,36 @@ with tab_mercado:
 
                 card_html = textwrap.dedent(f"""
                 <div class="{card_class}">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
-                        <div style="flex: 1; min-width: 250px;">
+                    <div class="card-body">
+                        <div class="card-info">
                             <span class="julius-badge" style="background-color: {badge_color}; color: white;">
                                 {badge_text}
                             </span>
-                            <span style="color: #94a3b8; font-size: 13px; margin-left: 10px;">
+                            <span class="store-badge-sub">
                                 🏪 {item.store}{loc_label}
                             </span>
-                            <h3 style="margin: 8px 0 6px 0; color: #f8fafc; font-size: 18px;">{item.title}</h3>
-                            <div style="margin-top: 6px; display: flex; gap: 8px; flex-wrap: wrap;">
+                            <h3 class="product-title">{item.title}</h3>
+                            <div class="badges-row">
                                 {unit_html}
                                 {size_html}
                             </div>
                         </div>
-                        <div style="text-align: right; min-width: 140px;">
-                            <span class="price-tag">R$ {item.price:.2f}</span>
-                            <div style="color: #94a3b8; font-size: 12px; margin-top: 2px;">Preço da Embalagem</div>
-                            {orig_html}
-                            {disc_html}
+                        <div class="card-pricing">
+                            <div>
+                                <span class="price-tag">R$ {item.price:.2f}</span>
+                                <div class="pack-sub">Preço da Embalagem</div>
+                            </div>
+                            <div style="text-align: right;">
+                                {orig_html}
+                                {disc_html}
+                            </div>
                         </div>
                     </div>
                 </div>
                 """).strip()
 
                 st.markdown(card_html, unsafe_allow_html=True)
-                c_link, _ = st.columns([2, 3])
-                with c_link:
-                    st.link_button(f"👉 Ver Oferta no {item.store}", item.url, use_container_width=True)
+                st.link_button(f"👉 Ver Oferta no {item.store}", item.url, use_container_width=True)
 
             # Monitorar
             st.markdown("---")
@@ -537,29 +757,32 @@ with tab_varejo:
 
                 card_html = textwrap.dedent(f"""
                 <div class="{card_class}">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start;">
-                        <div>
+                    <div class="card-body">
+                        <div class="card-info">
                             <span class="julius-badge" style="background-color: {badge_color}; color: white;">
                                 {badge_text}
                             </span>
-                            <span style="color: #94a3b8; font-size: 13px; margin-left: 10px;">
+                            <span class="store-badge-sub">
                                 🏪 {item.store} (Varejo Online)
                             </span>
-                            <h3 style="margin: 8px 0 4px 0; color: #f8fafc; font-size: 18px;">{item.title}</h3>
+                            <h3 class="product-title">{item.title}</h3>
                         </div>
-                        <div style="text-align: right; min-width: 140px;">
-                            <span class="price-tag">R$ {item.price:.2f}</span>
-                            {orig_html}
-                            {disc_html}
+                        <div class="card-pricing">
+                            <div>
+                                <span class="price-tag">R$ {item.price:.2f}</span>
+                                <div class="pack-sub">Preço à vista / Oferta</div>
+                            </div>
+                            <div style="text-align: right;">
+                                {orig_html}
+                                {disc_html}
+                            </div>
                         </div>
                     </div>
                 </div>
                 """).strip()
 
                 st.markdown(card_html, unsafe_allow_html=True)
-                c_link, _ = st.columns([2, 3])
-                with c_link:
-                    st.link_button(f"👉 Ir para Loja Oficial ({item.store})", item.url, use_container_width=True)
+                st.link_button(f"👉 Ir para Loja Oficial ({item.store})", item.url, use_container_width=True)
 
             # Monitorar
             st.markdown("---")
@@ -783,14 +1006,14 @@ with tab_geo:
             m_badge_text = "📍 Unidade Direta na Cidade" if m['is_direct_city_match'] else "🚚 Atende a Região"
             m_html = textwrap.dedent(f"""
             <div class="price-card">
-                <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="card-body" style="align-items: center;">
                     <div>
-                        <h4 style="margin: 0; color: #f8fafc;">🏪 {m['name']}</h4>
-                        <p style="margin: 4px 0; color: #94a3b8; font-size: 14px;">{m['description']}</p>
+                        <h4 style="margin: 0; color: #f8fafc; font-size: 16px;">🏪 {m['name']}</h4>
+                        <p style="margin: 4px 0; color: #94a3b8; font-size: 13px;">{m['description']}</p>
                         <span style="font-size: 12px; color: #38bdf8;">🌐 Cobertura: {m['coverage']}</span>
                     </div>
-                    <div>
-                        <span class="julius-badge" style="background-color: {m_badge_color}; color: white;">
+                    <div style="margin-top: 4px;">
+                        <span class="julius-badge" style="background-color: {m_badge_color}; color: white; font-size: 12px;">
                             {m_badge_text}
                         </span>
                     </div>

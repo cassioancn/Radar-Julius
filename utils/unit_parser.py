@@ -205,3 +205,4 @@ def calculate_normalized_price(
         "detected_size": parsed["detected_str"],
         "matches_target": matches_target
     }
+
