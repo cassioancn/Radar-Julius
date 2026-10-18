@@ -292,64 +292,85 @@ with tab2:
     st.subheader("📊 Produtos em Monitoramento Ativo")
     st.caption("O Radar Julius armazena os 3 menores preços de todos os tempos de cada produto e a data exata da captura para fins de comparação.")
 
+    products_data = []
     with get_db() as db:
-        tracked_list = db.query(TrackedProduct).all()
+        tracked_list = db.query(TrackedProduct).order_by(TrackedProduct.created_at.desc()).all()
+        for p in tracked_list:
+            historical_tops = db.query(HistoricalTopPrice).filter(
+                HistoricalTopPrice.product_id == p.id
+            ).order_by(HistoricalTopPrice.rank).all()
 
-    if not tracked_list:
+            captures = db.query(PriceCapture).filter(
+                PriceCapture.product_id == p.id
+            ).order_by(PriceCapture.captured_at.desc()).limit(15).all()
+
+            products_data.append({
+                "id": p.id,
+                "name": p.name,
+                "niche": p.niche or "Geral",
+                "target_drop_pct": p.target_drop_pct or 10.0,
+                "last_best_price": p.last_best_price or 0.0,
+                "user_city": p.user_city or "São Leopoldo",
+                "user_state": p.user_state or "RS",
+                "last_checked_at": p.last_checked_at,
+                "active": p.active,
+                "historical_tops": [{
+                    "rank": h.rank,
+                    "price": h.price,
+                    "store_name": h.store_name,
+                    "captured_at": h.captured_at
+                } for h in historical_tops],
+                "captures": [{
+                    "captured_at": c.captured_at.strftime("%d/%m %H:%M") if c.captured_at else "",
+                    "store_name": c.store_name,
+                    "price": c.price
+                } for c in captures]
+            })
+
+    if not products_data:
         st.info("Nenhum produto cadastrado ainda. Use a aba de busca acima para pesquisar e adicionar produtos ao radar!")
     else:
-        for p in tracked_list:
-            with st.expander(f"📦 {p.name} — Menor Preço Atual: R$ {p.last_best_price:.2f} (Alerta: queda >= {p.target_drop_pct}%)", expanded=True):
+        for p in products_data:
+            with st.expander(f"📦 {p['name']} — Menor Preço Atual: R$ {p['last_best_price']:.2f} (Alerta: queda >= {p['target_drop_pct']}%)", expanded=True):
                 col_info1, col_info2, col_info3 = st.columns([2, 2, 2])
                 with col_info1:
-                    st.write(f"**Categoria / Nicho:** {p.niche}")
-                    st.write(f"**Localização Alvo:** {p.user_city or 'Nacional'} - {p.user_state or ''}")
+                    st.write(f"**Categoria / Nicho:** {p['niche']}")
+                    st.write(f"**Localização Alvo:** {p['user_city']} - {p['user_state']}")
                 with col_info2:
-                    st.write(f"**Última Checagem:** {p.last_checked_at.strftime('%d/%m/%Y %H:%M') if p.last_checked_at else 'Pendente'}")
-                    st.write(f"**Status:** {'🟢 Ativo' if p.active else '⚪ Inativo'}")
+                    st.write(f"**Última Checagem:** {p['last_checked_at'].strftime('%d/%m/%Y %H:%M') if p['last_checked_at'] else 'Pendente'}")
+                    st.write(f"**Status:** {'🟢 Ativo' if p['active'] else '⚪ Inativo'}")
                 with col_info3:
-                    if st.button(f"🔄 Rechecar Agora", key=f"recheck_{p.id}"):
-                        with st.spinner(f"Buscando preços atualizados para {p.name}..."):
-                            s_res = scraper_manager.search_all(query=p.name, city=p.user_city, uf=p.user_state)
-                            scraper_manager.process_and_persist_tracked_product(p.id, s_res)
+                    if st.button(f"🔄 Rechecar Agora", key=f"recheck_{p['id']}"):
+                        with st.spinner(f"Buscando preços atualizados para {p['name']}..."):
+                            s_res = scraper_manager.search_all(query=p['name'], city=p['user_city'], uf=p['user_state'])
+                            scraper_manager.process_and_persist_tracked_product(p['id'], s_res)
                             st.success("Atualizado!")
                             st.rerun()
 
                 st.markdown("#### 🥇🥈🥉 Os 3 Melhores Preços Históricos Gravados")
-                with get_db() as db:
-                    historical_tops = db.query(HistoricalTopPrice).filter(
-                        HistoricalTopPrice.product_id == p.id
-                    ).order_by(HistoricalTopPrice.rank).all()
-
-                if historical_tops:
+                if p["historical_tops"]:
                     h_cols = st.columns(3)
                     ranks_labels = ["🥇 1º Menor Preço de Todos os Tempos", "🥈 2º Menor Preço Histórico", "🥉 3º Menor Preço Histórico"]
-                    for idx, h in enumerate(historical_tops):
+                    for idx, h in enumerate(p["historical_tops"]):
                         with h_cols[idx]:
                             st.markdown(f"""
                             <div style="background-color: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155; text-align: center;">
                                 <div style="font-size: 13px; font-weight: bold; color: #38bdf8;">{ranks_labels[idx]}</div>
-                                <div style="font-size: 24px; font-weight: bold; color: #22c55e; margin: 6px 0;">R$ {h.price:.2f}</div>
-                                <div style="font-size: 13px; color: #cbd5e1;">🏪 {h.store_name}</div>
-                                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">📅 {h.captured_at.strftime('%d/%m/%Y às %H:%M')}</div>
+                                <div style="font-size: 24px; font-weight: bold; color: #22c55e; margin: 6px 0;">R$ {h['price']:.2f}</div>
+                                <div style="font-size: 13px; color: #cbd5e1;">🏪 {h['store_name']}</div>
+                                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">📅 {h['captured_at'].strftime('%d/%m/%Y às %H:%M') if h['captured_at'] else ''}</div>
                             </div>
                             """, unsafe_allow_html=True)
                 else:
                     st.info("Ainda não há histórico consolidado.")
 
-                # Gráfico e histórico de capturas recentes
-                with get_db() as db:
-                    captures = db.query(PriceCapture).filter(
-                        PriceCapture.product_id == p.id
-                    ).order_by(PriceCapture.captured_at.desc()).limit(15).all()
-
-                if captures:
+                if p["captures"]:
                     st.markdown("##### 📈 Registro de Preços Capturados")
                     df_caps = pd.DataFrame([{
-                        "Data/Hora": c.captured_at.strftime("%d/%m %H:%M"),
-                        "Loja": c.store_name,
-                        "Preço (R$)": c.price
-                    } for c in captures])
+                        "Data/Hora": c["captured_at"],
+                        "Loja": c["store_name"],
+                        "Preço (R$)": c["price"]
+                    } for c in p["captures"]])
                     st.dataframe(df_caps, use_container_width=True)
 
 # -------------------------------------------------------------
