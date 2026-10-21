@@ -24,6 +24,83 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+import base64
+import streamlit.components.v1 as components
+
+# Injeção de Meta Tags Apple Touch Icon e Web App para iOS Safari
+def inject_pwa_meta_tags(app_title: str, icon_file: Path):
+    """Injeta meta tags iOS e Apple Touch Icon diretamente no head do navegador."""
+    if not icon_file.exists():
+        return
+    try:
+        with open(icon_file, "rb") as f:
+            b64_str = base64.b64encode(f.read()).decode("utf-8")
+        data_uri = f"data:image/png;base64,{b64_str}"
+        
+        components.html(f"""
+        <script>
+        (function() {{
+            try {{
+                const doc = window.parent.document;
+                const head = doc.head;
+                
+                // 1. Remove qualquer apple-touch-icon anterior
+                const oldIcons = head.querySelectorAll("link[rel*='apple-touch-icon']");
+                oldIcons.forEach(el => el.remove());
+
+                // 2. Adiciona o novo apple-touch-icon em alta resolução
+                const link = doc.createElement("link");
+                link.rel = "apple-touch-icon";
+                link.sizes = "180x180";
+                link.href = "{data_uri}";
+                head.appendChild(link);
+
+                const linkPre = doc.createElement("link");
+                linkPre.rel = "apple-touch-icon-precomposed";
+                linkPre.href = "{data_uri}";
+                head.appendChild(linkPre);
+
+                // 3. Atualiza o favicon
+                const favicons = head.querySelectorAll("link[rel*='icon']");
+                favicons.forEach(el => el.href = "{data_uri}");
+
+                // 4. Meta tags para Web App standalone no iOS
+                let metaCap = doc.querySelector("meta[name='apple-mobile-web-app-capable']");
+                if (!metaCap) {{
+                    metaCap = doc.createElement("meta");
+                    metaCap.name = "apple-mobile-web-app-capable";
+                    head.appendChild(metaCap);
+                }}
+                metaCap.content = "yes";
+
+                let metaTitle = doc.querySelector("meta[name='apple-mobile-web-app-title']");
+                if (!metaTitle) {{
+                    metaTitle = doc.createElement("meta");
+                    metaTitle.name = "apple-mobile-web-app-title";
+                    head.appendChild(metaTitle);
+                }}
+                metaTitle.content = "{app_title}";
+
+                let metaStatus = doc.querySelector("meta[name='apple-mobile-web-app-status-bar-style']");
+                if (!metaStatus) {{
+                    metaStatus = doc.createElement("meta");
+                    metaStatus.name = "apple-mobile-web-app-status-bar-style";
+                    head.appendChild(metaStatus);
+                }}
+                metaStatus.content = "black-translucent";
+            }} catch(e) {{
+                console.warn("PWA inject error:", e);
+            }}
+        }})();
+        </script>
+        """, height=0, width=0)
+    except Exception:
+        pass
+
+pwa_icon_path = Path(__file__).resolve().parent / "assets" / "apple-touch-icon.png"
+inject_pwa_meta_tags("Radar Julius", pwa_icon_path)
+
+
 # Inicializa banco de dados
 init_db()
 
