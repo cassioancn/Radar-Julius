@@ -315,21 +315,71 @@ st.markdown("""
             color: #f1f5f9 !important;
         }
 
-        /* Abas com rolagem horizontal suave no celular */
+        /* Posicionamento e tamanho ergonômico para o botão da barra lateral (>>) */
+        [data-testid="stSidebarCollapsedControl"],
+        [data-testid="collapsedControl"] {
+            top: 14px !important;
+            left: 14px !important;
+            z-index: 999999 !important;
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            border-radius: 8px !important;
+            min-width: 44px !important;
+            min-height: 44px !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        [data-testid="stSidebarCollapsedControl"] svg,
+        [data-testid="collapsedControl"] svg {
+            width: 22px !important;
+            height: 22px !important;
+            fill: #22c55e !important;
+        }
+
+        /* Abas em formato de pílulas deslizáveis por toque (Touch Swipe) */
         div[data-baseweb="tab-list"] {
+            display: flex !important;
+            flex-direction: row !important;
+            flex-wrap: nowrap !important;
             overflow-x: auto !important;
             -webkit-overflow-scrolling: touch !important;
+            scroll-behavior: smooth !important;
             scrollbar-width: none !important;
-            gap: 4px !important;
-            padding-bottom: 4px !important;
+            gap: 6px !important;
+            padding: 4px 2px 8px 2px !important;
+            width: 100% !important;
+            border-bottom: 1px solid #334155 !important;
         }
         div[data-baseweb="tab-list"]::-webkit-scrollbar {
             display: none !important;
         }
+
+        /* Oculta as flechinhas quebradas do BaseWeb que travam no celular */
+        div[data-baseweb="tab-list"] ~ button,
+        div[data-baseweb="tab-list"] > button[aria-label*="Scroll"],
+        div[data-baseweb="tab-list"] > button[aria-label="Previous"],
+        div[data-baseweb="tab-list"] > button[aria-label="Next"],
+        div[data-baseweb="tab-border"] ~ button {
+            display: none !important;
+        }
+
         button[data-baseweb="tab"] {
-            font-size: 12.5px !important;
-            padding: 8px 11px !important;
+            flex: 0 0 auto !important;
+            border-radius: 8px !important;
+            font-size: 13px !important;
+            padding: 8px 12px !important;
+            font-weight: 700 !important;
+            white-space: nowrap !important;
+            background-color: #1e293b !important;
+            border: 1px solid #334155 !important;
+            color: #94a3b8 !important;
             min-height: 42px !important;
+        }
+        button[data-baseweb="tab"][aria-selected="true"] {
+            background-color: rgba(34, 197, 94, 0.15) !important;
+            border-color: #22c55e !important;
+            color: #22c55e !important;
         }
 
         /* Grade 2x2 para os 4 Cards de Métricas de Economia */
@@ -510,15 +560,20 @@ st.markdown(f"""
         </div>
     </div>
 </div>
-<div class="mobile-loc-bar">
-    <div>
-        📍 <strong>{user_city} - {user_state}</strong>{f' ({user_neighborhood})' if user_neighborhood else ''}
-    </div>
-    <div style="font-size: 11px; color: #38bdf8;">
-        Alterar CEP na barra lateral ☰
-    </div>
 </div>
 """, unsafe_allow_html=True)
+
+# Barra de Localização Interativa para Mobile e Desktop
+with st.expander(f"📍 Localização: {user_city} - {user_state} ({user_neighborhood or 'Região'}) — Toque para Alterar CEP", expanded=False):
+    col_mc1, col_mc2 = st.columns([2.5, 1.2])
+    with col_mc1:
+        new_mobile_cep = st.text_input("Digite seu CEP:", value=st.session_state["user_cep"], key="quick_mobile_cep_input")
+    with col_mc2:
+        st.write("")
+        st.write("")
+        if st.button("🔍 Atualizar CEP", key="btn_quick_mobile_cep", use_container_width=True):
+            handle_cep_update(new_mobile_cep)
+            st.rerun()
 
 # Abas Principais (Rótulos Otimizados para Mobile e Desktop)
 tab_mercado, tab_varejo, tab_monitor, tab_scan, tab_n8n, tab_geo = st.tabs([

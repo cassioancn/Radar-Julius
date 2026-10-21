@@ -11,36 +11,72 @@
   <link rel="icon" type="image/png" sizes="512x512" href="https://cassioancn.github.io/Radar-Julius/icon-512.png">
   <link rel="manifest" href="https://cassioancn.github.io/Radar-Julius/manifest.json">
   
+  <!-- Modo App Standalone para iOS (estilo aplicativo da App Store) -->
   <meta name="apple-mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Radar Julius">
   <meta name="theme-color" content="#0f172a">
   
   <style>
-    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
     html, body {
-      margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
       background-color: #0f172a;
       font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      /* Safe area insets para afastar o conteúdo do relógio e notch do iPhone */
+      padding-top: env(safe-area-inset-top, 47px);
+      padding-bottom: env(safe-area-inset-bottom, 0px);
+      display: flex;
+      flex-direction: column;
     }
     #loading {
-      position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
       background-color: #0f172a;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      color: #f8fafc; z-index: 10; transition: opacity 0.4s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      color: #f8fafc;
+      z-index: 10;
+      transition: opacity 0.4s ease;
     }
     #loading img {
-      width: 90px; height: 90px; border-radius: 20px;
-      box-shadow: 0 10px 25px rgba(0,0,0,0.5); margin-bottom: 16px;
+      width: 90px;
+      height: 90px;
+      border-radius: 20px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      margin-bottom: 16px;
     }
     .spinner {
-      width: 28px; height: 28px;
+      width: 28px;
+      height: 28px;
       border: 3px solid rgba(255,255,255,0.2);
-      border-top-color: #22c55e; border-radius: 50%;
-      animation: spin 0.8s linear infinite; margin-top: 10px;
+      border-top-color: #22c55e;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-top: 10px;
     }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    iframe { width: 100%; height: 100%; border: none; display: block; }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    iframe {
+      flex: 1;
+      width: 100%;
+      height: 100%;
+      border: none;
+      display: block;
+    }
   </style>
 </head>
 <body>
@@ -53,7 +89,7 @@
 
   <iframe
     id="app-frame"
-    src="https://share.streamlit.io/cassioancn/radar-julius/main/app.py?embed=true"
+    src="https://share.streamlit.io/cassioancn/radar-julius/main/app.py"
     allow="clipboard-read; clipboard-write; geolocation"
     onload="document.getElementById('loading').style.opacity='0'; setTimeout(() => document.getElementById('loading').style.display='none', 400);"
   ></iframe>
