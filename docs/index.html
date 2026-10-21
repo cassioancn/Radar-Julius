@@ -89,9 +89,23 @@
 
   <iframe
     id="app-frame"
-    src="https://share.streamlit.io/cassioancn/radar-julius/main/app.py"
+    src="https://share.streamlit.io/cassioancn/radar-julius/main/app.py?embed=true"
     allow="clipboard-read; clipboard-write; geolocation"
-    onload="document.getElementById('loading').style.opacity='0'; setTimeout(() => document.getElementById('loading').style.display='none', 400);"
+    onload="hideLoader()"
   ></iframe>
+
+  <script>
+    function hideLoader() {
+      var loader = document.getElementById('loading');
+      if (loader && loader.style.display !== 'none') {
+        loader.style.opacity = '0';
+        setTimeout(function() {
+          loader.style.display = 'none';
+        }, 350);
+      }
+    }
+    // Timeout de segurança: nunca bloqueia a tela se o servidor demorar para inicializar
+    setTimeout(hideLoader, 3500);
+  </script>
 </body>
 </html>

@@ -234,6 +234,12 @@ st.markdown("""
         display: inline-block;
     }
 
+    /* Oculta footer padrão e marcas d'água */
+    footer, [data-testid="stStatusWidget"], [class*="viewerBadge"] {
+        display: none !important;
+        visibility: hidden !important;
+    }
+
     /* Abas Touch-Friendly */
     div[data-baseweb="tab-list"] {
         gap: 6px !important;
