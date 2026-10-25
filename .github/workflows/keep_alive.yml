@@ -1,0 +1,26 @@
+name: Keep App Alive
+
+on:
+  schedule:
+    # Executa a cada 4 horas (às 00:15, 04:15, 08:15, 12:15, 16:15, 20:15 UTC)
+    - cron: '15 */4 * * *'
+  workflow_dispatch: # Permite disparar manualmente pela interface do GitHub
+
+jobs:
+  ping-app:
+    name: Ping Streamlit App
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Streamlit App & GitHub Pages
+        run: |
+          echo "Disparando ping para manter o Radar Julius acordado..."
+          
+          # Ping na URL do Streamlit Cloud
+          STATUS_STREAMLIT=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 KeepAlive/1.0" "https://share.streamlit.io/cassioancn/radar-julius/main/app.py?embed=true")
+          echo "Streamlit Cloud Status: $STATUS_STREAMLIT"
+
+          # Ping no GitHub Pages
+          STATUS_PAGES=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 KeepAlive/1.0" "https://cassioancn.github.io/Radar-Julius/")
+          echo "GitHub Pages Status: $STATUS_PAGES"
+
+          echo "Ping concluído com sucesso. App mantido ativo!"
