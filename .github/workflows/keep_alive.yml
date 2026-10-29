@@ -1,26 +1,63 @@
-name: Keep App Alive
+name: Keep App Alive (Playwright Auto-Wake)
 
 on:
   schedule:
-    # Executa a cada 4 horas (às 00:15, 04:15, 08:15, 12:15, 16:15, 20:15 UTC)
-    - cron: '15 */4 * * *'
-  workflow_dispatch: # Permite disparar manualmente pela interface do GitHub
+    # Executa a cada 6 horas (4 vezes ao dia)
+    - cron: '0 */6 * * *'
+  workflow_dispatch: # Permite disparar manualmente pelo GitHub
 
 jobs:
-  ping-app:
-    name: Ping Streamlit App
+  auto-wake:
+    name: Wake and Keep App Alive
     runs-on: ubuntu-latest
     steps:
-      - name: Ping Streamlit App & GitHub Pages
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Playwright & Chromium
         run: |
-          echo "Disparando ping para manter o Radar Julius acordado..."
-          
-          # Ping na URL do Streamlit Cloud
-          STATUS_STREAMLIT=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 KeepAlive/1.0" "https://share.streamlit.io/cassioancn/radar-julius/main/app.py?embed=true")
-          echo "Streamlit Cloud Status: $STATUS_STREAMLIT"
+          pip install playwright
+          playwright install chromium --with-deps
 
-          # Ping no GitHub Pages
-          STATUS_PAGES=$(curl -s -o /dev/null -w "%{http_code}" -m 30 -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36 KeepAlive/1.0" "https://cassioancn.github.io/Radar-Julius/")
-          echo "GitHub Pages Status: $STATUS_PAGES"
+      - name: Run Auto-Wake Script
+        run: |
+          python - << 'EOF'
+          import time
+          from playwright.sync_api import sync_playwright
 
-          echo "Ping concluído com sucesso. App mantido ativo!"
+          urls = [
+              "https://radar-julius-c6w8h7d9v2uge3rgphuj4.streamlit.app",
+              "https://share.streamlit.io/cassioancn/radar-julius/main/app.py?embed=true"
+          ]
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch(headless=True)
+              context = browser.new_context(user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36")
+              page = context.new_page()
+
+              for url in urls:
+                  print(f"--> Verificando {url}...")
+                  try:
+                      page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                      time.sleep(5)
+
+                      # Procura pelo botão de acordar o app caso tenha entrado em suspensão
+                      wake_btn = page.query_selector('button:has-text("Yes, get this app back up!")') or page.query_selector('button:has-text("wake it back up")')
+                      if wake_btn:
+                          print("⚡ APP ESTAVA DORMINDO! Clicando no botão para acordar...")
+                          wake_btn.click()
+                          time.sleep(15)
+                          print("✅ Botão pressionado com sucesso, servidor religado!")
+                      else:
+                          print("✅ App já está acordado.")
+
+                      # Mantém a conexão aberta para firmar a sessão WebSocket
+                      time.sleep(10)
+                  except Exception as e:
+                      print(f"Aviso ao verificar {url}: {e}")
+
+              browser.close()
+              print("Rotina de keep-alive concluída!")
+          EOF
