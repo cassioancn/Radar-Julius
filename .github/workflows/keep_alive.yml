@@ -2,8 +2,8 @@ name: Keep App Alive (Playwright Auto-Wake)
 
 on:
   schedule:
-    # Executa a cada 6 horas (4 vezes ao dia)
-    - cron: '0 */6 * * *'
+    # Executa a cada 6 horas (00:00, 06:00, 12:00, 18:00 UTC)
+    - cron: '0 0,6,12,18 * * *'
   workflow_dispatch: # Permite disparar manualmente pelo GitHub
 
 jobs:
@@ -29,7 +29,7 @@ jobs:
 
           urls = [
               "https://radar-julius-c6w8h7d9v2uge3rgphuj4.streamlit.app",
-              "https://share.streamlit.io/cassioancn/radar-julius/main/app.py?embed=true"
+              "https://evolucao-saude-cmx3ay3lqw2ndcbvsqc76d.streamlit.app"
           ]
 
           with sync_playwright() as p:
@@ -46,12 +46,12 @@ jobs:
                       # Procura pelo botão de acordar o app caso tenha entrado em suspensão
                       wake_btn = page.query_selector('button:has-text("Yes, get this app back up!")') or page.query_selector('button:has-text("wake it back up")')
                       if wake_btn:
-                          print("⚡ APP ESTAVA DORMINDO! Clicando no botão para acordar...")
+                          print(f"⚡ {url} ESTAVA DORMINDO! Clicando no botão para acordar...")
                           wake_btn.click()
                           time.sleep(15)
                           print("✅ Botão pressionado com sucesso, servidor religado!")
                       else:
-                          print("✅ App já está acordado.")
+                          print(f"✅ {url} já está acordado.")
 
                       # Mantém a conexão aberta para firmar a sessão WebSocket
                       time.sleep(10)
