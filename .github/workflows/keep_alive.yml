@@ -28,7 +28,7 @@ jobs:
           from playwright.sync_api import sync_playwright
 
           urls = [
-              "https://radar-julius-c6w8h7d9v2uge3rgphuj4.streamlit.app",
+              "https://radar-julius-c6w8h7d9iv2uge3rgphuj4.streamlit.app",
               "https://evolucao-saude-cmx3ay3lqw2ndcbvsqc76d.streamlit.app"
           ]
 
@@ -38,26 +38,51 @@ jobs:
               page = context.new_page()
 
               for url in urls:
-                  print(f"--> Verificando {url}...")
+                  print(f"\n==================================================")
+                  print(f"--> Conectando em: {url}")
+                  print(f"==================================================")
                   try:
-                      page.goto(url, wait_until="domcontentloaded", timeout=60000)
+                      page.goto(url, timeout=60000)
                       time.sleep(5)
 
-                      # Procura pelo botão de acordar o app caso tenha entrado em suspensão
-                      wake_btn = page.query_selector('button:has-text("Yes, get this app back up!")') or page.query_selector('button:has-text("wake it back up")')
-                      if wake_btn:
-                          print(f"⚡ {url} ESTAVA DORMINDO! Clicando no botão para acordar...")
-                          wake_btn.click()
-                          time.sleep(15)
-                          print("✅ Botão pressionado com sucesso, servidor religado!")
-                      else:
-                          print(f"✅ {url} já está acordado.")
+                      # Procura pelo botão de acordar com polling ativo
+                      wake_btn = None
+                      for attempt in range(6):
+                          wake_btn = page.query_selector('button:has-text("Yes, get this app back up!")') or page.query_selector('button:has-text("wake it back up")')
+                          if wake_btn:
+                              break
+                          time.sleep(2)
 
-                      # Mantém a conexão aberta para firmar a sessão WebSocket
+                      if wake_btn:
+                          print("⚡ STATUS: App estava dormindo (Zzzz)!")
+                          print("👉 Clicando no botão 'Yes, get this app back up!'...")
+                          wake_btn.click()
+                          print("✅ Clique efetuado! Aguardando o container reiniciar...")
+
+                          # Aguarda até 90s para o Streamlit renderizar o app
+                          app_ready = False
+                          for i in range(18):
+                              time.sleep(5)
+                              if page.query_selector('[data-testid="stAppViewContainer"]') or page.query_selector('.main'):
+                                  app_ready = True
+                                  print(f"🎉 SUCESSO: App acordou e carregou a interface em {(i+1)*5}s!")
+                                  break
+                              print(f"Aguardando container subir... ({(i+1)*5}s)")
+
+                          if not app_ready:
+                              print("⚠️ Botão foi clicado, container está em processo de boot no Streamlit Cloud.")
+                      else:
+                          if page.query_selector('[data-testid="stAppViewContainer"]') or page.query_selector('.main'):
+                              print("✅ STATUS: App já está acordado e com a interface carregada!")
+                          else:
+                              body_text = page.locator('body').inner_text()
+                              print("Texto visível na página:", body_text[:200].replace('\n', ' '))
+
+                      # Permanece conectado por 10 segundos para firmar a sessão WebSocket
                       time.sleep(10)
                   except Exception as e:
-                      print(f"Aviso ao verificar {url}: {e}")
+                      print(f"❌ Erro ao processar {url}: {e}")
 
               browser.close()
-              print("Rotina de keep-alive concluída!")
+              print("\nRotina de despertar finalizada com sucesso!")
           EOF
