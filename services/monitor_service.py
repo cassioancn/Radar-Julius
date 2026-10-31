@@ -55,8 +55,14 @@ class BackgroundPriceMonitor:
             self.scheduler.shutdown(wait=False)
             self.is_running = False
 
-    def run_cycle(self) -> List[Dict[str, Any]]:
-        """Executa um ciclo completo de varredura para todos os produtos ativos."""
+    def run_cycle(
+        self,
+        phone: Optional[str] = None,
+        apikey: Optional[str] = None,
+        provider: Optional[str] = None,
+        custom_url: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        """Executa um ciclo completo de varredura para todos os produtos ativos e dispara WhatsApp se houver queda >= X%."""
         results = []
         self.last_run_time = datetime.utcnow()
 
@@ -83,10 +89,14 @@ class BackgroundPriceMonitor:
                     top_n=5
                 )
 
-                # 2. Persiste capturas, atualiza Top 3 histórico e alerta se queda >= X%
+                # 2. Persiste capturas, atualiza Top 3 histórico e alerta WhatsApp se queda >= X%
                 proc_res = self.scraper_manager.process_and_persist_tracked_product(
                     product_id=prod["id"],
-                    search_result=search_res
+                    search_result=search_res,
+                    phone=phone,
+                    apikey=apikey,
+                    provider=provider,
+                    custom_url=custom_url
                 )
 
                 results.append({

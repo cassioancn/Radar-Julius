@@ -7,7 +7,7 @@ from .retail import BuscapeScraper, MercadoLivreScraper, AmazonScraper, MagaluSc
 from .supermarkets import AtacadaoScraper, MacromixScraper, RissulScraper, StockCenterScraper
 from database.db import get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice
-from notifications.n8n_dispatcher import dispatch_price_drop_alert
+from notifications.whatsapp_dispatcher import dispatch_price_drop_alert
 from utils.unit_parser import calculate_normalized_price
 
 class ScraperManager:
@@ -144,10 +144,14 @@ class ScraperManager:
         self,
         product_id: int,
         search_result: Dict[str, Any],
+        phone: Optional[str] = None,
+        apikey: Optional[str] = None,
+        provider: Optional[str] = None,
+        custom_url: Optional[str] = None,
         custom_webhook_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """
-        Grava capturas, atualiza os 3 melhores preços históricos e detecta queda >= X% para notificar n8n.
+        Grava capturas, atualiza os 3 melhores preços históricos e detecta queda >= X% para disparar alerta via WhatsApp.
         """
         top_items: List[ProductItem] = search_result.get("top_prices", [])
         if not top_items:
@@ -187,7 +191,7 @@ class ScraperManager:
             if old_price and old_price > 0 and best_current.price < old_price:
                 drop_pct = ((old_price - best_current.price) / old_price) * 100.0
                 if drop_pct >= product.target_drop_pct:
-                    # Dispara notificação via n8n
+                    # Dispara notificação via WhatsApp direto em código
                     alert_details = dispatch_price_drop_alert(
                         product_id=product.id,
                         product_name=product.name,
@@ -200,7 +204,10 @@ class ScraperManager:
                         url=best_current.url,
                         location_city=best_current.location or product.user_city,
                         image_url=best_current.image_url,
-                        custom_webhook_url=custom_webhook_url
+                        phone=phone,
+                        apikey=apikey,
+                        provider=provider,
+                        custom_url=custom_url or custom_webhook_url
                     )
                     alert_dispatched = True
 

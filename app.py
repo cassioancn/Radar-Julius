@@ -13,7 +13,14 @@ from database.db import init_db, get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice, NotificationLog
 from scrapers.manager import ScraperManager
 from geo.locator import get_location_from_cep, get_available_supermarkets_for_location, clean_cep
-from notifications.n8n_dispatcher import dispatch_price_drop_alert, test_n8n_connection, get_julius_quote
+from notifications.whatsapp_dispatcher import (
+    dispatch_price_drop_alert,
+    test_whatsapp_connection,
+    send_whatsapp_message,
+    format_whatsapp_message,
+    generate_whatsapp_share_link,
+    get_julius_quote
+)
 from services.monitor_service import get_monitor_instance
 
 # Configuração da página Streamlit
@@ -582,12 +589,12 @@ with st.expander(f"📍 Localização: {user_city} - {user_state} ({user_neighbo
             st.rerun()
 
 # Abas Principais (Rótulos Otimizados para Mobile e Desktop)
-tab_mercado, tab_varejo, tab_monitor, tab_scan, tab_n8n, tab_geo = st.tabs([
+tab_mercado, tab_varejo, tab_monitor, tab_scan, tab_whatsapp, tab_geo = st.tabs([
     "🛒 Mercado",
     "📺 Bens de Consumo",
     "📊 Monitorados",
     "⏱️ Varredura",
-    "⚡ n8n Alertas",
+    "📱 Alertas WhatsApp",
     "📍 Mercados"
 ])
 
@@ -1067,7 +1074,17 @@ with tab_scan:
     with col_act1:
         if st.button("🚀 Executar Ciclo de Varredura Agora (Manual)", type="primary", use_container_width=True):
             with st.spinner("Executando ciclo de varredura em todos os produtos monitorados..."):
-                cycle_results = monitor.run_cycle()
+                w_phone = st.session_state.get("whatsapp_phone") or os.getenv("WHATSAPP_PHONE")
+                w_key = st.session_state.get("whatsapp_apikey") or os.getenv("WHATSAPP_APIKEY")
+                w_prov = st.session_state.get("whatsapp_provider") or os.getenv("WHATSAPP_PROVIDER", "callmebot")
+                w_url = st.session_state.get("whatsapp_api_url") or os.getenv("WHATSAPP_API_URL")
+
+                cycle_results = monitor.run_cycle(
+                    phone=w_phone,
+                    apikey=w_key,
+                    provider=w_prov,
+                    custom_url=w_url
+                )
                 st.success(f"Ciclo concluído! {len(cycle_results)} produto(s) verificados.")
                 st.json(cycle_results)
     with col_act2:
@@ -1080,56 +1097,139 @@ with tab_scan:
             st.success(f"Intervalo ajustado para {new_interval} minutos!")
 
 # -------------------------------------------------------------
-# ABA 5: INTEGRAÇÃO n8n (WHATSAPP E E-MAIL)
+# ABA 5: DISPARADOR DIRETO WHATSAPP (SEM n8n)
 # -------------------------------------------------------------
-with tab_n8n:
-    st.subheader("⚡ Integração com n8n para Disparo de Notificações")
-    st.markdown("""
-    O Radar Julius é projetado para integração desacoplada com o **n8n**.
-    Ao detectar uma queda de preço de **>= X%**, o sistema faz uma requisição HTTP POST para o Webhook configurado, entregando:
-    - Dados do produto e lojas (preço antigo, preço novo, desconto %, economia em R$).
-    - Mensagem pronta formatada para nós de **WhatsApp** (Evolution API / Z-API / Baileys).
-    - Template HTML profissional formatado para nós de **E-mail** (SMTP / Resend / Gmail).
-    - Citações temáticas do Julius Rock para engajar o usuário!
-    """)
+with tab_whatsapp:
+    st.subheader("📱 Gerador de Alertas Direto no WhatsApp")
+    st.caption("Receba alertas automáticos de queda de preço diretamente no seu WhatsApp pessoal ou em grupos, sem intermediários ou servidores externos!")
 
-    n8n_url = st.text_input(
-        "URL do Webhook do n8n:",
-        value=os.getenv("N8N_WEBHOOK_URL", "https://seu-n8n.exemplo.com/webhook/radar-julius-alert"),
-        help="Insira a URL do nó Webhook criado no seu workflow n8n."
-    )
+    # Inicialização de configurações no session_state
+    if "whatsapp_phone" not in st.session_state:
+        st.session_state["whatsapp_phone"] = os.getenv("WHATSAPP_PHONE", "")
+    if "whatsapp_apikey" not in st.session_state:
+        st.session_state["whatsapp_apikey"] = os.getenv("WHATSAPP_APIKEY", "")
+    if "whatsapp_provider" not in st.session_state:
+        st.session_state["whatsapp_provider"] = os.getenv("WHATSAPP_PROVIDER", "callmebot")
+    if "whatsapp_api_url" not in st.session_state:
+        st.session_state["whatsapp_api_url"] = os.getenv("WHATSAPP_API_URL", "")
 
-    col_test_btn, col_json_preview = st.columns([1, 2])
-    with col_test_btn:
-        if st.button("🧪 Disparar Alerta de Teste para o n8n", use_container_width=True):
-            with st.spinner("Enviando webhook de teste..."):
-                test_res = test_n8n_connection(n8n_url)
-                if test_res.get("success"):
-                    st.success("🎉 Webhook disparado com sucesso para o n8n!")
-                    st.json(test_res)
-                else:
-                    st.warning(f"Status do disparo: {test_res.get('status')} - {test_res.get('message', 'Erro ao conectar')}")
-                    st.json(test_res)
+    col_cfg1, col_cfg2 = st.columns([1.8, 1.2])
 
-    with col_json_preview:
-        st.markdown("##### 📄 Exemplo do Payload enviado para o n8n:")
-        mock_payload = {
-            "event": "PRICE_DROP_ALERT",
-            "product": {"name": "Arroz Branco 5kg Tipo 1", "niche": "Alimentos"},
-            "pricing": {
-                "store_name": "Atacadão",
-                "old_price": 32.90,
-                "new_price": 24.50,
-                "discount_percentage": 25.5,
-                "savings_reais": 8.40
-            },
-            "location": {"city": "São Leopoldo - RS"},
-            "formatted_messages": {
-                "whatsapp": "🚨 *RADAR JULIUS: QUEDA DE PREÇO DETECTADA!* ...",
-                "email_html": "<div>...</div>"
-            }
+    with col_cfg1:
+        st.markdown("#### ⚙️ Configuração do Envio")
+
+        provider_options = {
+            "callmebot": "🟢 CallMeBot API (100% Gratuito - Uso Pessoal)",
+            "evolution": "⚡ Instância Própria (Evolution API / Z-API)",
+            "link_only": "🔗 Apenas Gerador de Link Direto (wa.me)"
         }
-        st.code(mock_payload, language="json")
+        selected_provider_key = st.selectbox(
+            "Provedor de Envio WhatsApp:",
+            options=list(provider_options.keys()),
+            format_func=lambda k: provider_options[k],
+            index=0 if st.session_state["whatsapp_provider"] == "callmebot" else (1 if st.session_state["whatsapp_provider"] in ("evolution", "zapi") else 2)
+        )
+        st.session_state["whatsapp_provider"] = selected_provider_key
+
+        phone_input = st.text_input(
+            "Seu Número de WhatsApp (com DDD e DDI):",
+            value=st.session_state["whatsapp_phone"],
+            placeholder="Ex: 5551999998888 (55 + DDD + Número)",
+            help="Digite o número com 55 (Brasil) + DDD + Telefone sem espaços ou traços."
+        )
+
+        if selected_provider_key == "callmebot":
+            st.info("""
+            💡 **Como obter sua Chave Gratuita do CallMeBot (em 30 segundos):**
+            1. Adicione o bot no WhatsApp: [Clique para conversar com +34 941 01 99 63](https://wa.me/34941019963?text=I%20allow%20callmebot%20to%20send%20me%20messages)
+            2. Envie exatamente a mensagem: `I allow callmebot to send me messages`
+            3. O bot responderá na hora com o seu número e a sua **apikey** (código numérico).
+            4. Cole a apikey abaixo e clique em **Disparar Mensagem de Teste**!
+            """)
+            apikey_input = st.text_input(
+                "Chave de API do CallMeBot (apikey):",
+                value=st.session_state["whatsapp_apikey"],
+                type="password",
+                placeholder="Ex: 1234567"
+            )
+        elif selected_provider_key == "evolution":
+            custom_url_input = st.text_input(
+                "Endpoint HTTP POST da Instância WhatsApp:",
+                value=st.session_state["whatsapp_api_url"],
+                placeholder="Ex: https://sua-api.com/message/sendText"
+            )
+            apikey_input = st.text_input(
+                "Token / API Key da Instância:",
+                value=st.session_state["whatsapp_apikey"],
+                type="password"
+            )
+            st.session_state["whatsapp_api_url"] = custom_url_input
+        else:
+            apikey_input = ""
+            st.success("Modo Link Direto ativado! As mensagens serão formatadas e você poderá enviá-las com 1 clique pelo WhatsApp Web ou celular.")
+
+        col_b1, col_b2 = st.columns(2)
+        with col_b1:
+            if st.button("💾 Salvar Configurações", use_container_width=True):
+                st.session_state["whatsapp_phone"] = phone_input
+                st.session_state["whatsapp_apikey"] = apikey_input
+                st.success("Configurações salvas para a sessão atual!")
+
+        with col_b2:
+            if st.button("🧪 Disparar Teste Agora", type="primary", use_container_width=True):
+                if not phone_input:
+                    st.warning("Preencha o número de WhatsApp antes de disparar o teste.")
+                elif selected_provider_key == "callmebot" and not apikey_input:
+                    st.warning("Preencha a apikey do CallMeBot antes de disparar o teste.")
+                else:
+                    with st.spinner("Enviando mensagem de teste via código..."):
+                        test_res = test_whatsapp_connection(
+                            phone=phone_input,
+                            apikey=apikey_input,
+                            provider=selected_provider_key,
+                            custom_url=st.session_state.get("whatsapp_api_url")
+                        )
+                        if test_res.get("success"):
+                            st.success(f"🎉 {test_res.get('message', 'Mensagem enviada com sucesso!')}")
+                        else:
+                            st.error(f"❌ {test_res.get('message', 'Falha no envio')}")
+                        st.json(test_res)
+
+    with col_cfg2:
+        st.markdown("#### 💬 Prévia da Notificação do Julius")
+        mock_msg = format_whatsapp_message(
+            product_name="Arroz Branco Tipo 1 5kg",
+            store_name="Atacadão",
+            old_price=34.90,
+            new_price=24.90,
+            drop_pct=28.7,
+            savings=10.00,
+            url="https://www.atacadao.com.br",
+            location_city=user_city
+        )
+        st.text_area("Formato da Mensagem:", value=mock_msg, height=220, disabled=True)
+
+        share_url = generate_whatsapp_share_link(phone_input or st.session_state["whatsapp_phone"], mock_msg)
+        st.link_button("📲 Abrir no WhatsApp Web / App", share_url, use_container_width=True)
+
+    st.markdown("---")
+    st.markdown("#### 📋 Histórico de Alertas Disparados (Neon PostgreSQL)")
+    with get_db() as db:
+        logs = db.query(NotificationLog).order_by(NotificationLog.sent_at.desc()).limit(20).all()
+        if logs:
+            df_logs = pd.DataFrame([{
+                "Data/Hora": l.sent_at.strftime("%d/%m/%Y %H:%M:%S") if l.sent_at else "",
+                "Produto ID": l.product_id,
+                "Loja": l.store_name,
+                "Preço Anterior": f"R$ {l.old_price:.2f}",
+                "Novo Preço": f"R$ {l.new_price:.2f}",
+                "Queda (%)": f"-{l.drop_pct:.1f}%",
+                "Canal": l.channel,
+                "Status": "✅ Enviado" if l.status == "sent" else f"⚠️ {l.status}"
+            } for l in logs])
+            st.dataframe(df_logs, use_container_width=True)
+        else:
+            st.info("Nenhum alerta disparado ainda. Quando o monitor contínuo detectar quedas de preço nos produtos ativos, o registro aparecerá aqui.")
 
 # -------------------------------------------------------------
 # ABA 6: GEOLOCALIZAÇÃO & MERCADOS PRÓXIMOS

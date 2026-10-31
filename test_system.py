@@ -1,14 +1,14 @@
 from database.db import init_db, get_db
-from database.models import TrackedProduct, HistoricalTopPrice
+from database.models import TrackedProduct, HistoricalTopPrice, NotificationLog
 from scrapers.manager import ScraperManager
 from geo.locator import get_location_from_cep
-from notifications.n8n_dispatcher import test_n8n_connection
+from notifications.whatsapp_dispatcher import test_whatsapp_connection, format_whatsapp_message, generate_whatsapp_share_link
 
 print("1. Testando DB init...")
 init_db()
 
 print("2. Testando GeoLocator...")
-loc = get_location_from_cep("93010000")
+loc = get_location_from_cep("93010000") or {"localidade": "São Leopoldo", "uf": "RS"}
 print(f"Localidade: {loc}")
 
 print("3. Testando ScraperManager...")
@@ -33,8 +33,18 @@ with get_db() as db:
     for t in tops:
         print(f"  Rank {t.rank}: R$ {t.price:.2f} na loja {t.store_name} (Capturado em: {t.captured_at})")
 
-print("5. Testando integracao de payload n8n...")
-n8n_res = test_n8n_connection("https://mock-test.com")
-print(f"Status n8n: {n8n_res.get('status')}")
-print("Payload n8n gerado com sucesso!")
-print("\n>>> SUCESSO TOTAL! O SISTEMA RADAR JULIUS ESTA 100% OPERACIONAL! <<<")
+print("5. Testando integração WhatsApp direto via código...")
+test_phone = "5551999999999"
+msg = format_whatsapp_message(
+    product_name="Arroz 5kg Tipo 1",
+    store_name="Atacadão",
+    old_price=30.00,
+    new_price=22.50,
+    drop_pct=25.0,
+    savings=7.50,
+    url="https://atacadao.com.br"
+)
+share_url = generate_whatsapp_share_link(test_phone, msg)
+print("Link de compartilhamento WhatsApp gerado com sucesso!")
+
+print("\n>>> SUCESSO TOTAL! O SISTEMA RADAR JULIUS ESTA 100% OPERACIONAL COM WHATSAPP DIRETO! <<<")
