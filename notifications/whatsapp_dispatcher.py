@@ -104,7 +104,7 @@ def send_whatsapp_message(
             return {
                 "success": False,
                 "status": "missing_apikey",
-                "message": "Chave de API do CallMeBot não fornecida. Solicite sua chave gratuita enviando 'I allow callmebot to send me messages' para +34 941 01 99 63 no WhatsApp.",
+                "message": "Chave de API do CallMeBot não fornecida. Solicite sua chave gratuita enviando 'I allow callmebot to send me messages' para +34 644 87 21 57 no WhatsApp.",
                 "provider": "callmebot"
             }
         
@@ -302,3 +302,4 @@ def test_whatsapp_connection(
         provider=provider,
         custom_url=custom_url
     )
+

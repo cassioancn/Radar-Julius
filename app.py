@@ -1141,7 +1141,7 @@ with tab_whatsapp:
         if selected_provider_key == "callmebot":
             st.info("""
             💡 **Como obter sua Chave Gratuita do CallMeBot (em 30 segundos):**
-            1. Adicione o bot no WhatsApp: [Clique para conversar com +34 941 01 99 63](https://wa.me/34941019963?text=I%20allow%20callmebot%20to%20send%20me%20messages)
+            1. Adicione o bot no WhatsApp: [Clique para conversar com +34 644 87 21 57](https://wa.me/34644872157?text=I%20allow%20callmebot%20to%20send%20me%20messages)
             2. Envie exatamente a mensagem: `I allow callmebot to send me messages`
             3. O bot responderá na hora com o seu número e a sua **apikey** (código numérico).
             4. Cole a apikey abaixo e clique em **Disparar Mensagem de Teste**!
