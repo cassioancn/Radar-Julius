@@ -1,113 +1,19 @@
-name: Keep App Alive (Playwright Auto-Wake)
+name: Keep App Alive (Auto-Wake)
 
 on:
   schedule:
-    # Executa a cada 6 horas (00:00, 06:00, 12:00, 18:00 UTC)
-    - cron: '0 0,6,12,18 * * *'
-  workflow_dispatch: # Permite disparar manualmente pelo GitHub
+    # Executa a cada 4 horas para prevenir hibernação do Streamlit Cloud
+    - cron: '0 */4 * * *'
+  workflow_dispatch: # Permite disparar manualmente pela aba Actions do GitHub
 
 jobs:
   auto-wake:
-    name: Wake and Keep App Alive
+    name: Wake and Keep Streamlit Apps Alive
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Wake Apps via Streamlit Keep Alive
+        uses: gpenessot/streamlit-keep-alive@v1
         with:
-          python-version: '3.11'
-
-      - name: Install Playwright & Chromium
-        run: |
-          pip install playwright
-          playwright install chromium --with-deps
-
-      - name: Run Auto-Wake Script
-        run: |
-          python - << 'EOF'
-          import time
-          from playwright.sync_api import sync_playwright
-
-          urls = [
-              "https://radar-julius-c6w8h7d9iv2uge3rgphuj4.streamlit.app",
-              "https://evolucao-saude-cmx3ay3lqw2ndcbvsqc76d.streamlit.app"
-          ]
-
-          with sync_playwright() as p:
-              browser = p.chromium.launch(
-                  headless=True,
-                  args=['--disable-blink-features=AutomationControlled', '--no-sandbox']
-              )
-              context = browser.new_context(
-                  user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-                  viewport={"width": 1280, "height": 800}
-              )
-              context.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
-              page = context.new_page()
-
-              for url in urls:
-                  print(f"\n==================================================")
-                  print(f"--> Conectando em: {url}")
-                  print(f"==================================================")
-                  try:
-                      page.goto(url, wait_until="networkidle", timeout=60000)
-                  except Exception as e:
-                      print(f"Aviso de navegação: {e}")
-
-                  time.sleep(6)
-
-                  # Lista frames para diagnóstico
-                  print(f"Total de frames detectados: {len(page.frames)}")
-                  for idx, f in enumerate(page.frames):
-                      print(f"  [Frame {idx}] URL: {f.url}")
-
-                  # Procura pelo botão de acordar em TODOS os frames (principal e iframes)
-                  clicked = False
-                  for attempt in range(8):
-                      for f in page.frames:
-                          try:
-                              btn = f.query_selector('button:has-text("Yes, get this app back up!")') or \
-                                    f.query_selector('button:has-text("wake it back up")') or \
-                                    f.query_selector('button:has-text("Wake up")')
-                              if btn:
-                                  print(f"⚡ STATUS: Encontrou botão de despertar no Frame {f.url}!")
-                                  print("👉 Clicando no botão 'Yes, get this app back up!'...")
-                                  btn.click()
-                                  clicked = True
-                                  break
-                          except Exception as err:
-                              pass
-                      if clicked:
-                          break
-                      time.sleep(2)
-
-                  if clicked:
-                      print("✅ Clique efetuado com sucesso! Aguardando container iniciar no Streamlit Cloud...")
-                      # Aguarda o app subir
-                      for i in range(15):
-                          time.sleep(5)
-                          for f in page.frames:
-                              if f.query_selector('[data-testid="stAppViewContainer"]') or f.query_selector('.main'):
-                                  print(f"🎉 SUCESSO: App acordou e carregou a tela em {(i+1)*5}s!")
-                                  break
-                  else:
-                      # Se não encontrou o botão de sono, verifica se o app já está carregado
-                      is_awake = False
-                      for f in page.frames:
-                          if f.query_selector('[data-testid="stAppViewContainer"]') or f.query_selector('.main'):
-                              print(f"✅ STATUS: App já está acordado e com a interface carregada no Frame {f.url}!")
-                              is_awake = True
-                              break
-                      if not is_awake:
-                          for idx, f in enumerate(page.frames):
-                              try:
-                                  text = f.locator('body').inner_text()[:200].replace('\n', ' ')
-                                  print(f"  Texto Frame {idx}: {text}")
-                              except:
-                                  pass
-
-                  # Mantém a conexão aberta para firmar a sessão WebSocket
-                  time.sleep(10)
-
-              browser.close()
-              print("\nRotina de despertar finalizada!")
-          EOF
+          app-urls: |
+            https://radar-julius-c6w8h7d9iv2uge3rgphuj4.streamlit.app
+            https://evolucao-saude-cmx3ay3lqw2ndcbvsqc76d.streamlit.app

@@ -39,6 +39,28 @@ def clean_phone_number(phone: str) -> str:
         digits = "55" + digits
     return digits
 
+def get_phone_variants(phone: str) -> list:
+    """
+    Retorna variantes de telefone brasileiro (com e sem o 9º dígito).
+    Contas antigas do WhatsApp foram registradas sem o nono dígito (ex: 555196907133),
+    enquanto cadastros novos usam o nono dígito (ex: 5551996907133).
+    O CallMeBot vincula a apikey estritamente ao JID detectado no WhatsApp.
+    """
+    clean = clean_phone_number(phone)
+    if not clean:
+        return []
+    variants = [clean]
+    if clean.startswith("55"):
+        if len(clean) == 13 and clean[4] == "9":
+            alt = clean[:4] + clean[5:]
+            if alt not in variants:
+                variants.append(alt)
+        elif len(clean) == 12:
+            alt = clean[:4] + "9" + clean[4:]
+            if alt not in variants:
+                variants.append(alt)
+    return variants
+
 def format_whatsapp_message(
     product_name: str,
     store_name: str,
@@ -108,74 +130,87 @@ def send_whatsapp_message(
                 "provider": "callmebot"
             }
         
-        try:
-            encoded_text = urllib.parse.quote(message)
-            url = f"https://api.callmebot.com/whatsapp.php?phone={target_phone}&text={encoded_text}&apikey={target_apikey}"
-            resp = requests.get(url, timeout=20)
-            
-            body_text = resp.text or ""
-            lower_body = body_text.lower()
+        phone_variants = get_phone_variants(target_phone)
+        last_error = None
+        for current_phone in phone_variants:
+            try:
+                encoded_text = urllib.parse.quote(message)
+                url = f"https://api.callmebot.com/whatsapp.php?phone={current_phone}&text={encoded_text}&apikey={target_apikey}"
+                resp = requests.get(url, timeout=20)
+                
+                body_text = resp.text or ""
+                lower_body = body_text.lower()
 
-            # 1. Verifica se há erros explícitos no HTML
-            if "apikey is invalid" in lower_body or "api key is invalid" in lower_body or "apikey is wrong" in lower_body:
-                return {
+                # Verifica se a chave é inválida para este formato de telefone específico
+                if "apikey is invalid" in lower_body or "api key is invalid" in lower_body or "apikey is wrong" in lower_body:
+                    last_error = {
+                        "success": False,
+                        "status": "invalid_apikey",
+                        "message": "A chave apikey informada é inválida ou expirou. Verifique o código numérico que o bot enviou.",
+                        "provider": "callmebot",
+                        "response": body_text[:200]
+                    }
+                    continue
+                if "not registered" in lower_body or "not allowed" in lower_body:
+                    last_error = {
+                        "success": False,
+                        "status": "not_registered",
+                        "message": "Número de telefone não autorizado no CallMeBot. Envie a mensagem de ativação para o bot.",
+                        "provider": "callmebot",
+                        "response": body_text[:200]
+                    }
+                    continue
+                if "0 messages left" in lower_body:
+                    return {
+                        "success": False,
+                        "status": "quota_exceeded",
+                        "message": "Cota de mensagens temporariamente esgotada no CallMeBot.",
+                        "provider": "callmebot",
+                        "response": body_text[:200]
+                    }
+                if "color:red" in lower_body:
+                    clean_err = re.sub(r"<[^>]+>", " ", body_text)
+                    clean_err = " ".join(clean_err.split())
+                    return {
+                        "success": False,
+                        "status": f"http_{resp.status_code}",
+                        "message": f"Aviso do CallMeBot: {clean_err[:200]}",
+                        "provider": "callmebot",
+                        "response": body_text[:200]
+                    }
+
+                # Sucesso: HTTP 200/203 ou queued
+                if resp.status_code in (200, 201, 202, 203) or "queued" in lower_body or "message to:" in lower_body:
+                    return {
+                        "success": True,
+                        "status": "sent",
+                        "message": f"Mensagem enfileirada com sucesso no CallMeBot (telefone: {current_phone})! O WhatsApp deve apitar em instantes.",
+                        "provider": "callmebot",
+                        "response": body_text[:200],
+                        "phone_used": current_phone
+                    }
+                else:
+                    last_error = {
+                        "success": False,
+                        "status": f"http_{resp.status_code}",
+                        "message": f"Erro CallMeBot HTTP {resp.status_code}: {body_text[:200]}",
+                        "provider": "callmebot",
+                        "response": body_text[:200]
+                    }
+            except Exception as e:
+                last_error = {
                     "success": False,
-                    "status": "invalid_apikey",
-                    "message": "A chave apikey informada é inválida ou expirou. Verifique o código numérico que o bot enviou.",
-                    "provider": "callmebot",
-                    "response": body_text[:200]
-                }
-            if "not registered" in lower_body or "not allowed" in lower_body:
-                return {
-                    "success": False,
-                    "status": "not_registered",
-                    "message": "Número de telefone não autorizado no CallMeBot. Envie a mensagem de ativação para o bot.",
-                    "provider": "callmebot",
-                    "response": body_text[:200]
-                }
-            if "0 messages left" in lower_body:
-                return {
-                    "success": False,
-                    "status": "quota_exceeded",
-                    "message": "Cota de mensagens temporariamente esgotada no CallMeBot.",
-                    "provider": "callmebot",
-                    "response": body_text[:200]
-                }
-            if "color:red" in lower_body:
-                clean_err = re.sub(r"<[^>]+>", " ", body_text)
-                clean_err = " ".join(clean_err.split())
-                return {
-                    "success": False,
-                    "status": f"http_{resp.status_code}",
-                    "message": f"Aviso do CallMeBot: {clean_err[:200]}",
-                    "provider": "callmebot",
-                    "response": body_text[:200]
+                    "status": "error",
+                    "message": f"Erro de conexão com CallMeBot: {str(e)}",
+                    "provider": "callmebot"
                 }
 
-            # 2. O CallMeBot retorna HTTP 203 ou 200 quando a mensagem é enfileirada com sucesso
-            if resp.status_code in (200, 201, 202, 203) or "queued" in lower_body or "message to:" in lower_body:
-                return {
-                    "success": True,
-                    "status": "sent",
-                    "message": "Mensagem enfileirada com sucesso no CallMeBot! O WhatsApp deve apitar em instantes.",
-                    "provider": "callmebot",
-                    "response": body_text[:200]
-                }
-            else:
-                return {
-                    "success": False,
-                    "status": f"http_{resp.status_code}",
-                    "message": f"Erro CallMeBot HTTP {resp.status_code}: {body_text[:200]}",
-                    "provider": "callmebot",
-                    "response": body_text[:200]
-                }
-        except Exception as e:
-            return {
-                "success": False,
-                "status": "error",
-                "message": f"Erro de conexão com CallMeBot: {str(e)}",
-                "provider": "callmebot"
-            }
+        return last_error or {
+            "success": False,
+            "status": "error",
+            "message": "Não foi possível autenticar o CallMeBot com as variantes do telefone informado.",
+            "provider": "callmebot"
+        }
 
     # 2. Provedor Evolution API / Z-API / Instância Própria
     elif prov in ("evolution", "zapi", "custom", "generic_webhook"):
