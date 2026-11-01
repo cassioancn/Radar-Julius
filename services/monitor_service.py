@@ -76,37 +76,56 @@ class BackgroundPriceMonitor:
                     "name": p.name,
                     "city": p.user_city,
                     "state": p.user_state,
-                    "target_drop": p.target_drop_pct
+                    "target_drop": p.target_drop_pct,
+                    "is_url_specific": getattr(p, "is_url_specific", False),
+                    "target_url": getattr(p, "target_url", None)
                 })
 
         for prod in products_to_check:
             try:
-                # 1. Executa busca ampla nos varejistas e supermercados
-                search_res = self.scraper_manager.search_all(
-                    query=prod["name"],
-                    city=prod.get("city"),
-                    uf=prod.get("state"),
-                    top_n=5
-                )
+                if prod.get("is_url_specific") and prod.get("target_url"):
+                    proc_res = self.scraper_manager.check_and_persist_tracked_url(
+                        product_id=prod["id"],
+                        phone=phone,
+                        apikey=apikey,
+                        provider=provider,
+                        custom_url=custom_url
+                    )
+                    results.append({
+                        "product_id": prod["id"],
+                        "product_name": prod["name"],
+                        "best_price": proc_res.get("price"),
+                        "best_store": proc_res.get("store"),
+                        "alert_dispatched": proc_res.get("alert_dispatched", False),
+                        "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+                    })
+                else:
+                    # 1. Executa busca ampla nos varejistas e supermercados
+                    search_res = self.scraper_manager.search_all(
+                        query=prod["name"],
+                        city=prod.get("city"),
+                        uf=prod.get("state"),
+                        top_n=5
+                    )
 
-                # 2. Persiste capturas, atualiza Top 3 histórico e alerta WhatsApp se queda >= X%
-                proc_res = self.scraper_manager.process_and_persist_tracked_product(
-                    product_id=prod["id"],
-                    search_result=search_res,
-                    phone=phone,
-                    apikey=apikey,
-                    provider=provider,
-                    custom_url=custom_url
-                )
+                    # 2. Persiste capturas, atualiza Top 3 histórico e alerta WhatsApp se queda >= X%
+                    proc_res = self.scraper_manager.process_and_persist_tracked_product(
+                        product_id=prod["id"],
+                        search_result=search_res,
+                        phone=phone,
+                        apikey=apikey,
+                        provider=provider,
+                        custom_url=custom_url
+                    )
 
-                results.append({
-                    "product_id": prod["id"],
-                    "product_name": prod["name"],
-                    "best_price": proc_res.get("best_price"),
-                    "best_store": proc_res.get("best_store"),
-                    "alert_dispatched": proc_res.get("alert_dispatched", False),
-                    "timestamp": datetime.utcnow().strftime("%H:%M:%S")
-                })
+                    results.append({
+                        "product_id": prod["id"],
+                        "product_name": prod["name"],
+                        "best_price": proc_res.get("best_price"),
+                        "best_store": proc_res.get("best_store"),
+                        "alert_dispatched": proc_res.get("alert_dispatched", False),
+                        "timestamp": datetime.utcnow().strftime("%H:%M:%S")
+                    })
             except Exception as e:
                 results.append({
                     "product_id": prod["id"],

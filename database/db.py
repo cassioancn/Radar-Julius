@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from contextlib import contextmanager
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 # Carrega variáveis de ambiente do .env local ao diretório do Radar Julius se existir
@@ -50,9 +50,29 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, expire_on_commit=
 Base = declarative_base()
 
 def init_db():
-    """Inicializa as tabelas no banco de dados se não existirem."""
+    """Inicializa as tabelas no banco de dados se não existirem e aplica migrações de colunas."""
     from . import models  # Importa os modelos para garantir registro
     Base.metadata.create_all(bind=engine)
+
+    # Auto-migração segura para colunas adicionadas em tracked_products
+    try:
+        inspector = inspect(engine)
+        if "tracked_products" in inspector.get_table_names():
+            columns = [c["name"] for c in inspector.get_columns("tracked_products")]
+            with engine.connect() as conn:
+                if "target_url" not in columns:
+                    conn.execute(text("ALTER TABLE tracked_products ADD COLUMN target_url TEXT"))
+                if "is_url_specific" not in columns:
+                    conn.execute(text("ALTER TABLE tracked_products ADD COLUMN is_url_specific BOOLEAN DEFAULT FALSE"))
+                if "image_url" not in columns:
+                    conn.execute(text("ALTER TABLE tracked_products ADD COLUMN image_url TEXT"))
+                if "current_price" not in columns:
+                    conn.execute(text("ALTER TABLE tracked_products ADD COLUMN current_price FLOAT"))
+                if "store_name" not in columns:
+                    conn.execute(text("ALTER TABLE tracked_products ADD COLUMN store_name VARCHAR(100)"))
+                conn.commit()
+    except Exception as e:
+        print(f"Aviso na verificação de migração do banco: {e}")
 
 @contextmanager
 def get_db():

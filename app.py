@@ -12,6 +12,9 @@ load_dotenv()
 from database.db import init_db, get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice, NotificationLog
 from scrapers.manager import ScraperManager
+from scrapers.coupons import coupon_manager
+from scrapers.url_scraper import url_product_scraper
+from services.basket_service import basket_service
 from geo.locator import get_location_from_cep, get_available_supermarkets_for_location, clean_cep
 from notifications.whatsapp_dispatcher import (
     dispatch_price_drop_alert,
@@ -239,6 +242,39 @@ st.markdown("""
         border-radius: 6px;
         font-size: 12px;
         display: inline-block;
+    }
+
+    /* Coupons & Basket Cards */
+    .coupon-card {
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        border-radius: 12px;
+        padding: 16px;
+        margin-bottom: 14px;
+        position: relative;
+        transition: transform 0.2s ease, border-color 0.2s ease;
+    }
+    .coupon-card:hover {
+        transform: translateY(-2px);
+    }
+    .coupon-code-pill {
+        background-color: #0f172a;
+        color: #22c55e;
+        border: 1.5px dashed #22c55e;
+        border-radius: 6px;
+        padding: 6px 14px;
+        font-family: monospace;
+        font-weight: 800;
+        font-size: 16px;
+        letter-spacing: 1px;
+        display: inline-block;
+    }
+    .basket-store-box {
+        background-color: #1e293b;
+        border-radius: 10px;
+        padding: 14px;
+        margin-bottom: 12px;
+        border: 1px solid #334155;
     }
 
     /* Oculta footer padrão e marcas d'água */
@@ -585,10 +621,12 @@ with st.expander(f"📍 Localização: {user_city} - {user_state} ({user_neighbo
             st.rerun()
 
 # Abas Principais (Rótulos Otimizados para Mobile e Desktop)
-tab_mercado, tab_varejo, tab_monitor, tab_scan, tab_whatsapp, tab_geo = st.tabs([
+tab_mercado, tab_basket, tab_varejo, tab_coupons, tab_monitor, tab_scan, tab_whatsapp, tab_geo = st.tabs([
     "🛒 Mercado",
+    "🧺 Cesto de Compras",
     "📺 Bens de Consumo",
-    "📊 Monitorados",
+    "🎟️ Cupons Ativos",
+    "📊 Monitorados & Links",
     "⏱️ Varredura",
     "📱 Alertas WhatsApp",
     "📍 Mercados"
@@ -798,6 +836,162 @@ with tab_mercado:
                             st.success(f"✅ '{prod_m_name}' cadastrado! Monitoramento ativo.")
 
 # -------------------------------------------------------------
+# ABA 2: 🧺 CESTO DE COMPRAS (OTIMIZADOR MULTI-MERCADOS)
+# -------------------------------------------------------------
+with tab_basket:
+    st.subheader("🧺 Cesto de Compras Inteligente (Otimizador Multi-Lojas)")
+    st.caption(
+        f"Monte sua lista de compras de supermercado. O Radar Julius varre os atacarejos e supermercados "
+        f"da sua região ({user_city} - {user_state}), compara os preços item a item e revela onde você gasta menos: "
+        f"comprando tudo na **Melhor Loja Única** ou aproveitando o **Modo Julius Extremo (Cesta Fracionada)**!"
+    )
+
+    st.write("**💡 Cestas Prontas para Testar:**")
+    col_pre1, col_pre2, col_pre3, col_pre4 = st.columns(4)
+    preset_cesta = None
+    with col_pre1:
+        if st.button("🛒 Cesta Básica Familiar", use_container_width=True, key="btn_preset_basica"):
+            preset_cesta = "Arroz 5kg\nFeijão Preto 1kg\nÓleo de Soja 900ml\nAçúcar Refinado 1kg\nLeite Integral 1L\nCafé em Pó 500g\nFarinha de Trigo 1kg\nSal Refinado 1kg"
+    with col_pre2:
+        if st.button("🥩 Churrasco Econômico", use_container_width=True, key="btn_preset_churras"):
+            preset_cesta = "Picanha Bovina kg\nCerveja Heineken Lata\nCarvão Vegetal 3kg\nLinguiça Toscana kg\nPão de Alho"
+    with col_pre3:
+        if st.button("🧼 Limpeza da Casa", use_container_width=True, key="btn_preset_limpeza"):
+            preset_cesta = "Sabão Líquido Omo\nDetergente Ypê 500ml\nÁgua Sanitária 2L\nAmaciante Comfort 1.5L\nDesinfetante Pinho Sol 1L"
+    with col_pre4:
+        if st.button("🥪 Café & Lanche", use_container_width=True, key="btn_preset_lanche"):
+            preset_cesta = "Pão de Forma Tradicional\nQueijo Mussarela fatiado\nPresunto Cozido fatiado\nManteiga com sal 200g\nCafé em Pó 500g"
+
+    if preset_cesta:
+        st.session_state["basket_items_input"] = preset_cesta
+
+    initial_basket_text = st.session_state.get(
+        "basket_items_input",
+        "Arroz 5kg\nFeijão Preto 1kg\nLeite Integral 1L\nAzeite de Oliva Extra Virgem\nCafé em Pó 500g"
+    )
+
+    basket_text = st.text_area(
+        "Digite ou cole os itens da sua lista (um produto por linha):",
+        value=initial_basket_text,
+        height=140,
+        key="basket_input_area"
+    )
+
+    col_btn_opt, col_btn_clr = st.columns([3, 1])
+    with col_btn_opt:
+        btn_optimize = st.button("⚡ Otimizar Cesto de Compras (Encontrar Menores Preços)", type="primary", use_container_width=True, key="btn_optimize_basket")
+    with col_btn_clr:
+        if st.button("🗑️ Limpar Lista", use_container_width=True, key="btn_clear_basket"):
+            st.session_state["basket_items_input"] = ""
+            st.session_state["basket_last_result"] = None
+            st.rerun()
+
+    if btn_optimize and basket_text.strip():
+        items_list = [line.strip() for line in basket_text.splitlines() if line.strip()]
+        if not items_list:
+            st.warning("Insira pelo menos um item na lista de compras.")
+        else:
+            with st.spinner(f"Varrendo os atacarejos e mercados de {user_city} para {len(items_list)} itens simultaneamente..."):
+                opt_res = basket_service.optimize_basket(
+                    item_queries=items_list,
+                    city=user_city,
+                    uf=user_state,
+                    include_retail=False
+                )
+                st.session_state["basket_last_result"] = opt_res
+
+    opt_res = st.session_state.get("basket_last_result")
+    if opt_res and opt_res.get("success"):
+        st.markdown("---")
+        st.subheader("🎯 Resultado da Otimização da Cesta")
+
+        b_single = opt_res.get("best_single_store")
+        b_divided = opt_res.get("divided_basket", {})
+        b_savings = opt_res.get("savings", {})
+
+        col_m1, col_m2, col_m3 = st.columns(3)
+        with col_m1:
+            if b_single:
+                st.metric(
+                    label=f"🏪 Melhor Loja Única ({b_single['store']})",
+                    value=f"R$ {b_single['total_price']:.2f}",
+                    help=f"Itens encontrados nesta loja: {b_single['found_count']}/{opt_res['total_requested_items']}"
+                )
+            else:
+                st.metric(label="🏪 Melhor Loja Única", value="N/D")
+        with col_m2:
+            st.metric(
+                label="🎯 Modo Julius Extremo (Cesta Fracionada)",
+                value=f"R$ {b_divided.get('total_price', 0.0):.2f}",
+                delta=f"-{b_savings.get('percentage', 0.0)}% OFF" if b_savings.get('amount_brl', 0) > 0 else None
+            )
+        with col_m3:
+            st.metric(
+                label="💰 Economia Real Extra",
+                value=f"R$ {b_savings.get('amount_brl', 0.0):.2f}",
+                delta=f"{b_savings.get('percentage', 0.0)}% economizado",
+                delta_color="normal"
+            )
+
+        j_quote = b_savings.get('julius_quote', 'Se eu não comprar nada, o desconto é bem maior!')
+        st.caption(f"💡 *'{j_quote}'* — Julius Rock")
+
+        if opt_res.get("whatsapp_link"):
+            st.link_button(
+                "📲 Enviar Lista de Compras Pronta para o WhatsApp",
+                opt_res["whatsapp_link"],
+                use_container_width=True
+            )
+
+        tab_sub_div, tab_sub_single, tab_sub_tbl = st.tabs([
+            "🎯 Modo Julius (Onde Comprar Cada Item)",
+            "🏪 Comparativo por Loja Única",
+            "📋 Tabela Completa de Itens"
+        ])
+
+        with tab_sub_div:
+            st.markdown("#### 🛒 Divida sua compra por mercado e economize o máximo:")
+            grouped = b_divided.get("grouped_by_store", {})
+            if not grouped:
+                st.info("Nenhum item com preço disponível nos mercados locais.")
+            else:
+                for store_name, s_items in grouped.items():
+                    store_subtotal = sum(i["price"] for i in s_items)
+                    with st.expander(f"🏪 **{store_name}** — {len(s_items)} itens (Subtotal: R$ {store_subtotal:.2f})", expanded=True):
+                        for it in s_items:
+                            col_it1, col_it2, col_it3 = st.columns([2, 1, 1.2])
+                            with col_it1:
+                                st.markdown(f"**{it['item_name']}**")
+                                st.caption(it['title'])
+                            with col_it2:
+                                st.markdown(f"**R$ {it['price']:.2f}**")
+                            with col_it3:
+                                if it.get("url"):
+                                    st.link_button("👉 Ver no Mercado", it["url"], use_container_width=True)
+
+        with tab_sub_single:
+            st.markdown("#### 🏢 Se você prefere comprar tudo em um único supermercado:")
+            all_single = opt_res.get("all_single_stores", [])
+            for idx, s in enumerate(all_single, start=1):
+                trophy = "🥇" if idx == 1 else ("🥈" if idx == 2 else "🥉")
+                with st.expander(f"{trophy} **{s['store']}** — Total: R$ {s['total_price']:.2f} (Cobertura: {s['found_count']}/{s['total_items']} itens)", expanded=(idx == 1)):
+                    for it_name, p_obj in s["items"].items():
+                        st.write(f"• **{it_name}**: R$ {p_obj.price:.2f} — *{p_obj.title[:50]}*")
+
+        with tab_sub_tbl:
+            table_data = []
+            for it in b_divided.get("items", []):
+                table_data.append({
+                    "Item Procurado": it["item_name"],
+                    "Produto Encontrado": it["title"],
+                    "Melhor Loja": it["store"],
+                    "Melhor Preço (R$)": f"R$ {it['price']:.2f}" if it['price'] > 0 else "Indisponível"
+                })
+            if table_data:
+                st.dataframe(pd.DataFrame(table_data), use_container_width=True)
+
+
+# -------------------------------------------------------------
 # ABA 2: 📺 BENS DE CONSUMO (ELETRÔNICOS, ELETRODOMÉSTICOS, MÓVEIS)
 # -------------------------------------------------------------
 with tab_varejo:
@@ -938,11 +1132,114 @@ with tab_varejo:
                             st.success(f"✅ '{prod_v_name}' cadastrado! Monitoramento ativo.")
 
 # -------------------------------------------------------------
-# ABA 3: PRODUTOS MONITORADOS & TOP 3 HISTÓRICO
+# ABA 4: 🎟️ RASTREADOR DE CUPONS ATIVOS
+# -------------------------------------------------------------
+with tab_coupons:
+    st.subheader("🎟️ Rastreador de Cupons de Desconto Ativos")
+    st.caption("Varredura em tempo real de cupons ativos e verificados para **Mercado Livre, Shopee, Amazon e Magazine Luiza**. Copie o código e economize nas suas compras online!")
+
+    col_cp_store, col_cp_query, col_cp_btn = st.columns([1.5, 2.5, 1])
+    with col_cp_store:
+        selected_coupon_store = st.selectbox(
+            "Filtrar Loja:",
+            ["Todas as Lojas", "Mercado Livre", "Shopee", "Amazon", "Magazine Luiza"],
+            key="coupon_store_select"
+        )
+    with col_cp_query:
+        coupon_query = st.text_input(
+            "Buscar por categoria ou termo:",
+            placeholder="Ex: tecnologia, frete grátis, 20%, eletro...",
+            key="coupon_search_input"
+        )
+    with col_cp_btn:
+        st.write("")
+        st.write("")
+        refresh_coupons = st.button("🔄 Atualizar Cupons", use_container_width=True, key="btn_refresh_coupons")
+
+    with st.spinner("Buscando cupons ativos..."):
+        coupons = coupon_manager.get_all_coupons(
+            selected_store=selected_coupon_store,
+            search_query=coupon_query
+        )
+
+    col_cm1, col_cm2, col_cm3, col_cm4 = st.columns(4)
+    with col_cm1:
+        st.metric("Cupons Ativos Encontrados", len(coupons))
+    with col_cm2:
+        distinct_stores = len(set(c["store"] for c in coupons)) if coupons else 0
+        st.metric("Lojas Monitoradas", distinct_stores)
+    with col_cm3:
+        st.metric("Modo Verificação", "Tempo Real 🟢")
+    with col_cm4:
+        st.metric("Economia Potencial", "Até 30% OFF")
+
+    st.markdown("---")
+
+    if not coupons:
+        st.info("Nenhum cupom encontrado para os filtros selecionados.")
+    else:
+        cols_c = st.columns(2)
+        for idx, c in enumerate(coupons):
+            col_target = cols_c[idx % 2]
+            with col_target:
+                store_color = c.get("color", "#22c55e")
+                store_icon = c.get("logo_icon", "🏷️")
+                badge_text = c.get("badge", "⚡ Verificado")
+                
+                coupon_html = (
+                    f'<div class="coupon-card" style="border-left: 5px solid {store_color};">'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">'
+                    f'<div><span style="font-weight: 700; color: #f8fafc; font-size: 14px;">{store_icon} {c["store"]}</span>'
+                    f'<span style="background-color: #334155; color: #94a3b8; font-size: 11px; padding: 2px 6px; border-radius: 4px; margin-left: 6px;">{c.get("category", "Geral")}</span></div>'
+                    f'<span class="julius-badge" style="background-color: #065f46; color: #6ee7b7; font-size: 11px;">{badge_text}</span>'
+                    f'</div>'
+                    f'<h4 style="margin: 0 0 6px 0; color: #f8fafc; font-size: 16px;">{c["title"]}</h4>'
+                    f'<p style="margin: 0 0 10px 0; color: #94a3b8; font-size: 13px;">{c.get("rules", "Consulte as regras no site oficial.")}</p>'
+                    f'<div style="display: flex; justify-content: space-between; align-items: center;">'
+                    f'<div><span class="discount-pill" style="font-size: 13px; padding: 4px 10px;">{c["discount"]}</span></div>'
+                    f'<div><span class="coupon-code-pill">{c["code"]}</span></div>'
+                    f'</div>'
+                    f'</div>'
+                )
+                st.markdown(coupon_html, unsafe_allow_html=True)
+                st.link_button(f"👉 Usar Cupom na {c['store']}", c.get("url", "https://www.google.com"), use_container_width=True)
+                st.write("")
+
+
+# -------------------------------------------------------------
+# ABA 5: PRODUTOS MONITORADOS, LINKS DIRETOS & TOP 3 HISTÓRICO
 # -------------------------------------------------------------
 with tab_monitor:
-    st.subheader("📊 Produtos em Monitoramento Ativo")
-    st.caption("O Radar Julius armazena os 3 menores preços de todos os tempos de cada produto e a data exata da captura para fins de comparação.")
+    st.subheader("📊 Produtos & Links em Monitoramento Ativo")
+    st.caption("O Radar Julius armazena os 3 menores preços de todos os tempos de cada produto/link e a data exata da captura para fins de comparação.")
+
+    # Recurso Novo: Monitorar Link Específico (URL Direta)
+    with st.expander("🔗 Monitorar Link Web Específico (URL no Mercado Livre, Amazon, Shopee, Magalu, Atacadão, etc.)", expanded=False):
+        st.caption("Cole o link direto de qualquer produto online. O Julius extrai o título, imagem e preço atual, mantendo um radar contínuo com histórico e alertas de queda no WhatsApp!")
+        col_u_url, col_u_drop, col_u_btn = st.columns([3, 1.2, 1.5])
+        with col_u_url:
+            specific_url_input = st.text_input("Cole o Link (URL) do Produto:", placeholder="https://www.mercadolivre.com.br/...", key="input_specific_url")
+        with col_u_drop:
+            specific_url_drop = st.number_input("Alerta se cair >= (%)", min_value=1.0, max_value=80.0, value=10.0, step=1.0, key="input_specific_url_drop")
+        with col_u_btn:
+            st.write("")
+            st.write("")
+            btn_add_url = st.button("🚀 Monitorar Link Direto", type="primary", use_container_width=True, key="btn_add_url_track")
+
+        if btn_add_url and specific_url_input.strip():
+            with st.spinner("Acessando o link e capturando dados do produto..."):
+                url_track_res = scraper_manager.track_specific_url(
+                    target_url=specific_url_input.strip(),
+                    target_drop_pct=specific_url_drop,
+                    user_cep=user_cep,
+                    user_city=user_city,
+                    user_state=user_state
+                )
+                if url_track_res.get("success"):
+                    st.success(f"✅ Produto monitorado com sucesso! Loja: **{url_track_res.get('store')}** | Preço Atual: **R$ {url_track_res.get('price'):.2f}**")
+                    st.rerun()
+                else:
+                    st.error(f"❌ Não foi possível monitorar o link: {url_track_res.get('error')}")
 
     products_data = []
     with get_db() as db:
@@ -966,6 +1263,10 @@ with tab_monitor:
                 "user_state": p.user_state or "RS",
                 "last_checked_at": p.last_checked_at,
                 "active": p.active,
+                "is_url_specific": getattr(p, "is_url_specific", False),
+                "target_url": getattr(p, "target_url", None),
+                "image_url": getattr(p, "image_url", None),
+                "store_name": getattr(p, "store_name", None),
                 "historical_tops": [{
                     "rank": h.rank,
                     "price": h.price,
@@ -983,19 +1284,25 @@ with tab_monitor:
         st.info("Nenhum produto cadastrado ainda. Use a aba de busca acima para pesquisar e adicionar produtos ao radar!")
     else:
         for p in products_data:
-            with st.expander(f"📦 {p['name']} — Menor Preço Atual: R$ {p['last_best_price']:.2f} (Alerta: queda >= {p['target_drop_pct']}%)", expanded=True):
+            badge_type = f"🔗 [{p['store_name']}] " if p.get("is_url_specific") and p.get("store_name") else "📦 "
+            with st.expander(f"{badge_type}{p['name']} — Menor Preço Atual: R$ {p['last_best_price']:.2f} (Alerta: queda >= {p['target_drop_pct']}%)", expanded=True):
                 col_info1, col_info2, col_info3 = st.columns([2, 2, 2])
                 with col_info1:
                     st.write(f"**Categoria / Nicho:** {p['niche']}")
                     st.write(f"**Localização Alvo:** {p['user_city']} - {p['user_state']}")
+                    if p.get("is_url_specific") and p.get("target_url"):
+                        st.link_button("🌐 Abrir Link do Produto", p["target_url"], use_container_width=True)
                 with col_info2:
                     st.write(f"**Última Checagem:** {p['last_checked_at'].strftime('%d/%m/%Y %H:%M') if p['last_checked_at'] else 'Pendente'}")
                     st.write(f"**Status:** {'🟢 Ativo' if p['active'] else '⚪ Inativo'}")
                 with col_info3:
                     if st.button(f"🔄 Rechecar Agora", key=f"recheck_{p['id']}"):
                         with st.spinner(f"Buscando preços atualizados para {p['name']}..."):
-                            s_res = scraper_manager.search_all(query=p['name'], city=p['user_city'], uf=p['user_state'])
-                            scraper_manager.process_and_persist_tracked_product(p['id'], s_res)
+                            if p.get("is_url_specific"):
+                                scraper_manager.check_and_persist_tracked_url(p["id"])
+                            else:
+                                s_res = scraper_manager.search_all(query=p['name'], city=p['user_city'], uf=p['user_state'])
+                                scraper_manager.process_and_persist_tracked_product(p['id'], s_res)
                             st.success("Atualizado!")
                             st.rerun()
 
