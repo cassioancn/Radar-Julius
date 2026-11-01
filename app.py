@@ -559,22 +559,18 @@ with st.sidebar:
     st.caption(f"💡 *\"{get_julius_quote(25.0)}\"*")
 
 # Cabeçalho Principal com suporte a Mobile
-st.markdown(f"""
-<div class="main-header">
-    <div class="main-header-content">
-        <div>
-            <h1 style="margin: 0; color: #f8fafc; font-size: 26px;">🎯 Radar Julius - Preços & Economia</h1>
-            <p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 14px;">
-                Varredura em tempo real no Varejo e Mercados da sua região ({user_city} - {user_state}).
-            </p>
-        </div>
-        <div>
-            <span class="julius-badge">MODO ECONOMIA ATIVADO</span>
-        </div>
-    </div>
-</div>
-</div>
-""", unsafe_allow_html=True)
+header_html = (
+    f'<div class="main-header">'
+    f'<div class="main-header-content">'
+    f'<div>'
+    f'<h1 style="margin: 0; color: #f8fafc; font-size: 26px;">🎯 Radar Julius - Preços & Economia</h1>'
+    f'<p style="margin: 4px 0 0 0; color: #94a3b8; font-size: 14px;">Varredura em tempo real no Varejo e Mercados da sua região ({user_city} - {user_state}).</p>'
+    f'</div>'
+    f'<div><span class="julius-badge">MODO ECONOMIA ATIVADO</span></div>'
+    f'</div>'
+    f'</div>'
+)
+st.markdown(header_html, unsafe_allow_html=True)
 
 # Barra de Localização Interativa para Mobile e Desktop
 with st.expander(f"📍 Localização: {user_city} - {user_state} ({user_neighborhood or 'Região'}) — Toque para Alterar CEP", expanded=False):
@@ -746,36 +742,25 @@ with tab_mercado:
 
                 unit_html = f'<span class="unit-badge">⚖️ {item.unit_label}</span>' if item.has_unit_price and item.unit_label else ''
                 size_html = f'<span class="size-badge">📦 {item.detected_size}</span>' if item.detected_size else ''
+                badges_row_html = f'<div class="badges-row">{unit_html}{size_html}</div>' if (unit_html or size_html) else ''
+                right_price_html = f'<div style="text-align: right;">{orig_html}{disc_html}</div>'
 
-                card_html = textwrap.dedent(f"""
-                <div class="{card_class}">
-                    <div class="card-body">
-                        <div class="card-info">
-                            <span class="julius-badge" style="background-color: {badge_color}; color: white;">
-                                {badge_text}
-                            </span>
-                            <span class="store-badge-sub">
-                                🏪 {item.store}{loc_label}
-                            </span>
-                            <h3 class="product-title">{item.title}</h3>
-                            <div class="badges-row">
-                                {unit_html}
-                                {size_html}
-                            </div>
-                        </div>
-                        <div class="card-pricing">
-                            <div>
-                                <span class="price-tag">R$ {item.price:.2f}</span>
-                                <div class="pack-sub">Preço da Embalagem</div>
-                            </div>
-                            <div style="text-align: right;">
-                                {orig_html}
-                                {disc_html}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                """).strip()
+                card_html = (
+                    f'<div class="{card_class}">'
+                    f'<div class="card-body">'
+                    f'<div class="card-info">'
+                    f'<span class="julius-badge" style="background-color: {badge_color}; color: white;">{badge_text}</span>'
+                    f'<span class="store-badge-sub">🏪 {item.store}{loc_label}</span>'
+                    f'<h3 class="product-title">{item.title}</h3>'
+                    f'{badges_row_html}'
+                    f'</div>'
+                    f'<div class="card-pricing">'
+                    f'<div><span class="price-tag">R$ {item.price:.2f}</span><div class="pack-sub">Preço da Embalagem</div></div>'
+                    f'{right_price_html}'
+                    f'</div>'
+                    f'</div>'
+                    f'</div>'
+                )
 
                 st.markdown(card_html, unsafe_allow_html=True)
                 st.link_button(f"👉 Ver Oferta no {item.store}", item.url, use_container_width=True)
@@ -899,32 +884,23 @@ with tab_varejo:
                 badge_text = "🥇 1º CAMPEÃO DO PREÇO BAIXO" if is_top1 else f"#{idx} Menor Preço"
                 orig_html = f'<div style="color: #94a3b8; font-size: 13px; text-decoration: line-through;">R$ {item.original_price:.2f}</div>' if item.original_price else ''
                 disc_html = f'<span class="discount-pill">-{item.discount_pct}% OFF</span>' if item.discount_pct else ''
+                right_price_html = f'<div style="text-align: right;">{orig_html}{disc_html}</div>'
 
-                card_html = textwrap.dedent(f"""
-                <div class="{card_class}">
-                    <div class="card-body">
-                        <div class="card-info">
-                            <span class="julius-badge" style="background-color: {badge_color}; color: white;">
-                                {badge_text}
-                            </span>
-                            <span class="store-badge-sub">
-                                🏪 {item.store} (Varejo Online)
-                            </span>
-                            <h3 class="product-title">{item.title}</h3>
-                        </div>
-                        <div class="card-pricing">
-                            <div>
-                                <span class="price-tag">R$ {item.price:.2f}</span>
-                                <div class="pack-sub">Preço à vista / Oferta</div>
-                            </div>
-                            <div style="text-align: right;">
-                                {orig_html}
-                                {disc_html}
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                """).strip()
+                card_html = (
+                    f'<div class="{card_class}">'
+                    f'<div class="card-body">'
+                    f'<div class="card-info">'
+                    f'<span class="julius-badge" style="background-color: {badge_color}; color: white;">{badge_text}</span>'
+                    f'<span class="store-badge-sub">🏪 {item.store} (Varejo Online)</span>'
+                    f'<h3 class="product-title">{item.title}</h3>'
+                    f'</div>'
+                    f'<div class="card-pricing">'
+                    f'<div><span class="price-tag">R$ {item.price:.2f}</span><div class="pack-sub">Preço à vista / Oferta</div></div>'
+                    f'{right_price_html}'
+                    f'</div>'
+                    f'</div>'
+                    f'</div>'
+                )
 
                 st.markdown(card_html, unsafe_allow_html=True)
                 st.link_button(f"👉 Ir para Loja Oficial ({item.store})", item.url, use_container_width=True)
@@ -1030,14 +1006,14 @@ with tab_monitor:
                     for idx, h in enumerate(p["historical_tops"]):
                         with h_cols[idx]:
                             cap_date = h['captured_at'].strftime('%d/%m/%Y às %H:%M') if h['captured_at'] else ''
-                            h_html = textwrap.dedent(f"""
-                            <div style="background-color: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155; text-align: center;">
-                                <div style="font-size: 13px; font-weight: bold; color: #38bdf8;">{ranks_labels[idx]}</div>
-                                <div style="font-size: 24px; font-weight: bold; color: #22c55e; margin: 6px 0;">R$ {h['price']:.2f}</div>
-                                <div style="font-size: 13px; color: #cbd5e1;">🏪 {h['store_name']}</div>
-                                <div style="font-size: 11px; color: #64748b; margin-top: 4px;">📅 {cap_date}</div>
-                            </div>
-                            """).strip()
+                            h_html = (
+                                f'<div style="background-color: #0f172a; padding: 14px; border-radius: 8px; border: 1px solid #334155; text-align: center;">'
+                                f'<div style="font-size: 13px; font-weight: bold; color: #38bdf8;">{ranks_labels[idx]}</div>'
+                                f'<div style="font-size: 24px; font-weight: bold; color: #22c55e; margin: 6px 0;">R$ {h["price"]:.2f}</div>'
+                                f'<div style="font-size: 13px; color: #cbd5e1;">🏪 {h["store_name"]}</div>'
+                                f'<div style="font-size: 11px; color: #64748b; margin-top: 4px;">📅 {cap_date}</div>'
+                                f'</div>'
+                            )
                             st.markdown(h_html, unsafe_allow_html=True)
                 else:
                     st.info("Ainda não há histórico consolidado.")
@@ -1242,21 +1218,19 @@ with tab_geo:
         with st.container():
             m_badge_color = "#22c55e" if m['is_direct_city_match'] else "#64748b"
             m_badge_text = "📍 Unidade Direta na Cidade" if m['is_direct_city_match'] else "🚚 Atende a Região"
-            m_html = textwrap.dedent(f"""
-            <div class="price-card">
-                <div class="card-body" style="align-items: center;">
-                    <div>
-                        <h4 style="margin: 0; color: #f8fafc; font-size: 16px;">🏪 {m['name']}</h4>
-                        <p style="margin: 4px 0; color: #94a3b8; font-size: 13px;">{m['description']}</p>
-                        <span style="font-size: 12px; color: #38bdf8;">🌐 Cobertura: {m['coverage']}</span>
-                    </div>
-                    <div style="margin-top: 4px;">
-                        <span class="julius-badge" style="background-color: {m_badge_color}; color: white; font-size: 12px;">
-                            {m_badge_text}
-                        </span>
-                    </div>
-                </div>
-            </div>
-            """).strip()
+            m_html = (
+                f'<div class="price-card">'
+                f'<div class="card-body" style="align-items: center;">'
+                f'<div>'
+                f'<h4 style="margin: 0; color: #f8fafc; font-size: 16px;">🏪 {m["name"]}</h4>'
+                f'<p style="margin: 4px 0; color: #94a3b8; font-size: 13px;">{m["description"]}</p>'
+                f'<span style="font-size: 12px; color: #38bdf8;">🌐 Cobertura: {m["coverage"]}</span>'
+                f'</div>'
+                f'<div style="margin-top: 4px;">'
+                f'<span class="julius-badge" style="background-color: {m_badge_color}; color: white; font-size: 12px;">{m_badge_text}</span>'
+                f'</div>'
+                f'</div>'
+                f'</div>'
+            )
             st.markdown(m_html, unsafe_allow_html=True)
 
