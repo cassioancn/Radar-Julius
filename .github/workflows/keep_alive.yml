@@ -2,7 +2,7 @@ name: Keep App Alive (Auto-Wake)
 
 on:
   schedule:
-    # Executa a cada 4 horas para prevenir hibernação do Streamlit Cloud
+    # Executa a cada 4 horas (00:00, 04:00, 08:00, 12:00, 16:00, 20:00 UTC) para prevenir hibernação do Streamlit Cloud
     - cron: '0 */4 * * *'
   workflow_dispatch: # Permite disparar manualmente pela aba Actions do GitHub
 
@@ -11,9 +11,19 @@ jobs:
     name: Wake and Keep Streamlit Apps Alive
     runs-on: ubuntu-latest
     steps:
-      - name: Wake Apps via Streamlit Keep Alive
-        uses: gpenessot/streamlit-keep-alive@v1
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          app-urls: |
-            https://radar-julius-c6w8h7d9iv2uge3rgphuj4.streamlit.app
-            https://evolucao-saude-cmx3ay3lqw2ndcbvsqc76d.streamlit.app
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install Playwright & Chromium
+        run: |
+          pip install playwright
+          python -m playwright install chromium --with-deps
+
+      - name: Run Auto-Wake Script
+        run: python scripts/auto_wake.py
