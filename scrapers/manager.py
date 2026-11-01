@@ -284,95 +284,16 @@ class ScraperManager:
         target_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """Extrai as informações de um link de produto e cadastra no monitoramento específico."""
-        target_link = url or target_url
-        if not target_link:
-            return {"success": False, "error": "URL não fornecida.", "message": "URL não fornecida."}
-
-        from .url_scraper import url_product_scraper
-        item = url_product_scraper.scrape_url(target_link)
-        if not item or item.price <= 0:
-            err_msg = "Não foi possível extrair o preço e dados do produto automaticamente. Verifique se a página é pública e se o produto está disponível."
-            return {
-                "success": False,
-                "error": err_msg,
-                "message": err_msg
-            }
-        url = target_link
-
-        product_name = custom_name or item.title
-        with get_db() as db:
-            existing = db.query(TrackedProduct).filter(
-                (TrackedProduct.target_url == url) |
-                ((TrackedProduct.name == product_name) & (TrackedProduct.is_url_specific == True))
-            ).first()
-
-            if existing:
-                existing.active = True
-                existing.target_drop_pct = target_drop_pct
-                existing.current_price = item.price
-                existing.last_best_price = min(existing.last_best_price or item.price, item.price)
-                existing.last_checked_at = datetime.utcnow()
-                if item.image_url:
-                    existing.image_url = item.image_url
-                prod_id = existing.id
-            else:
-                new_prod = TrackedProduct(
-                    name=product_name,
-                    niche=item.store,
-                    target_drop_pct=target_drop_pct,
-                    last_best_price=item.price,
-                    current_price=item.price,
-                    user_cep=user_cep,
-                    user_city=user_city,
-                    user_state=user_state,
-                    active=True,
-                    created_at=datetime.utcnow(),
-                    last_checked_at=datetime.utcnow(),
-                    target_url=url,
-                    is_url_specific=True,
-                    image_url=item.image_url,
-                    store_name=item.store
-                )
-                db.add(new_prod)
-                db.flush()
-                prod_id = new_prod.id
-
-            now = datetime.utcnow()
-            db.add(PriceCapture(
-                product_id=prod_id,
-                store_name=item.store,
-                store_type=item.store_type,
-                product_title=item.title,
-                price=item.price,
-                original_price=item.original_price,
-                discount_pct=item.discount_pct,
-                url=url,
-                image_url=item.image_url,
-                location_city=user_city,
-                captured_at=now
-            ))
-
-            top_h = db.query(HistoricalTopPrice).filter(HistoricalTopPrice.product_id == prod_id).first()
-            if not top_h:
-                db.add(HistoricalTopPrice(
-                    product_id=prod_id,
-                    rank=1,
-                    store_name=item.store,
-                    product_title=item.title,
-                    price=item.price,
-                    url=url,
-                    captured_at=now
-                ))
-
-        return {
-            "success": True,
-            "product_id": prod_id,
-            "item": item,
-            "store": item.store,
-            "price": item.price,
-            "title": item.title,
-            "message": "Produto monitorado com sucesso!"
-        }
+        from .url_scraper import track_specific_url as _track
+        return _track(
+            url=url,
+            target_drop_pct=target_drop_pct,
+            user_city=user_city,
+            user_state=user_state,
+            user_cep=user_cep,
+            custom_name=custom_name,
+            target_url=target_url
+        )
 
     def check_and_persist_tracked_url(
         self,
@@ -383,114 +304,11 @@ class ScraperManager:
         custom_url: Optional[str] = None
     ) -> Dict[str, Any]:
         """Varre um link específico já cadastrado, verifica quedas e dispara alerta WhatsApp se houver queda >= X%."""
-        from .url_scraper import url_product_scraper
-
-        with get_db() as db:
-            product = db.query(TrackedProduct).filter(TrackedProduct.id == product_id).first()
-            if not product or not product.target_url:
-                return {"status": "error", "message": "Produto ou URL não encontrada"}
-
-            item = url_product_scraper.scrape_url(product.target_url)
-            if not item or item.price <= 0:
-                return {"status": "error", "message": "Falha ao extrair preço do link"}
-
-            now = datetime.utcnow()
-            product.last_checked_at = now
-            product.current_price = item.price
-            if item.image_url:
-                product.image_url = item.image_url
-
-            # Grava PriceCapture
-            db.add(PriceCapture(
-                product_id=product.id,
-                store_name=item.store,
-                store_type=item.store_type,
-                product_title=item.title,
-                price=item.price,
-                original_price=item.original_price,
-                discount_pct=item.discount_pct,
-                url=product.target_url,
-                image_url=item.image_url,
-                location_city=product.user_city,
-                captured_at=now
-            ))
-
-            # Verifica queda de preço >= X%
-            old_price = product.last_best_price
-            alert_dispatched = False
-            alert_details = None
-
-            if old_price and old_price > 0 and item.price < old_price:
-                drop_pct = ((old_price - item.price) / old_price) * 100.0
-                if drop_pct >= product.target_drop_pct:
-                    alert_details = dispatch_price_drop_alert(
-                        product_id=product.id,
-                        product_name=product.name,
-                        niche=product.niche,
-                        store_name=item.store,
-                        store_type=item.store_type,
-                        old_price=old_price,
-                        new_price=item.price,
-                        drop_pct=drop_pct,
-                        url=product.target_url,
-                        location_city=product.user_city,
-                        image_url=item.image_url,
-                        phone=phone,
-                        apikey=apikey,
-                        provider=provider,
-                        custom_url=custom_url
-                    )
-                    alert_dispatched = True
-
-            if not product.last_best_price or item.price < product.last_best_price:
-                product.last_best_price = item.price
-
-            # Atualiza Top 3 histórico
-            existing_history = db.query(HistoricalTopPrice).filter(
-                HistoricalTopPrice.product_id == product.id
-            ).all()
-
-            candidates = [{
-                "store_name": h.store_name,
-                "product_title": h.product_title,
-                "price": h.price,
-                "url": h.url,
-                "captured_at": h.captured_at
-            } for h in existing_history]
-
-            candidates.append({
-                "store_name": item.store,
-                "product_title": item.title,
-                "price": item.price,
-                "url": product.target_url,
-                "captured_at": now
-            })
-
-            seen = set()
-            unique_candidates = []
-            for c in sorted(candidates, key=lambda x: x["price"]):
-                key = round(c["price"], 2)
-                if key not in seen:
-                    seen.add(key)
-                    unique_candidates.append(c)
-
-            top_3 = unique_candidates[:3]
-            db.query(HistoricalTopPrice).filter(HistoricalTopPrice.product_id == product.id).delete()
-            for idx, c in enumerate(top_3, start=1):
-                db.add(HistoricalTopPrice(
-                    product_id=product.id,
-                    rank=idx,
-                    store_name=c["store_name"],
-                    product_title=c["product_title"],
-                    price=c["price"],
-                    url=c["url"],
-                    captured_at=c["captured_at"]
-                ))
-
-            return {
-                "status": "success",
-                "price": item.price,
-                "store": item.store,
-                "alert_dispatched": alert_dispatched,
-                "alert_details": alert_details
-            }
+        from .url_scraper import check_and_persist_tracked_url as _check
+        return _check(
+            product_id=product_id,
+            phone=phone,
+            apikey=apikey,
+            provider=provider,
+            custom_url=custom_url
+        )

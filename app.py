@@ -13,7 +13,7 @@ from database.db import init_db, get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice, NotificationLog
 from scrapers.manager import ScraperManager
 from scrapers.coupons import coupon_manager
-from scrapers.url_scraper import url_product_scraper
+from scrapers.url_scraper import url_product_scraper, track_specific_url, check_and_persist_tracked_url
 from services.basket_service import basket_service
 from geo.locator import get_location_from_cep, get_available_supermarkets_for_location, clean_cep
 from notifications.whatsapp_dispatcher import (
@@ -1228,18 +1228,21 @@ with tab_monitor:
 
         if btn_add_url and specific_url_input.strip():
             with st.spinner("Acessando o link e capturando dados do produto..."):
-                url_track_res = scraper_manager.track_specific_url(
-                    target_url=specific_url_input.strip(),
-                    target_drop_pct=specific_url_drop,
-                    user_cep=user_cep,
-                    user_city=user_city,
-                    user_state=user_state
-                )
-                if url_track_res.get("success"):
-                    st.success(f"✅ Produto monitorado com sucesso! Loja: **{url_track_res.get('store')}** | Preço Atual: **R$ {url_track_res.get('price'):.2f}**")
-                    st.rerun()
-                else:
-                    st.error(f"❌ Não foi possível monitorar o link: {url_track_res.get('error')}")
+                try:
+                    url_track_res = track_specific_url(
+                        target_url=specific_url_input.strip(),
+                        target_drop_pct=specific_url_drop,
+                        user_cep=user_cep,
+                        user_city=user_city,
+                        user_state=user_state
+                    )
+                    if url_track_res and url_track_res.get("success"):
+                        st.success(f"✅ Produto monitorado com sucesso! Loja: **{url_track_res.get('store')}** | Preço Atual: **R$ {url_track_res.get('price'):.2f}**")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Não foi possível monitorar o link: {url_track_res.get('error') if url_track_res else 'Falha ao acessar o link'}")
+                except Exception as ex:
+                    st.error(f"❌ Erro ao monitorar este link: {ex}")
 
     products_data = []
     with get_db() as db:
@@ -1298,13 +1301,16 @@ with tab_monitor:
                 with col_info3:
                     if st.button(f"🔄 Rechecar Agora", key=f"recheck_{p['id']}"):
                         with st.spinner(f"Buscando preços atualizados para {p['name']}..."):
-                            if p.get("is_url_specific"):
-                                scraper_manager.check_and_persist_tracked_url(p["id"])
-                            else:
-                                s_res = scraper_manager.search_all(query=p['name'], city=p['user_city'], uf=p['user_state'])
-                                scraper_manager.process_and_persist_tracked_product(p['id'], s_res)
-                            st.success("Atualizado!")
-                            st.rerun()
+                            try:
+                                if p.get("is_url_specific"):
+                                    check_and_persist_tracked_url(p["id"])
+                                else:
+                                    s_res = scraper_manager.search_all(query=p['name'], city=p['user_city'], uf=p['user_state'])
+                                    scraper_manager.process_and_persist_tracked_product(p['id'], s_res)
+                                st.success("Atualizado!")
+                                st.rerun()
+                            except Exception as ex:
+                                st.error(f"Erro ao rechecar: {ex}")
 
                 st.markdown("#### 🥇🥈🥉 Os 3 Melhores Preços Históricos Gravados")
                 if p["historical_tops"]:
