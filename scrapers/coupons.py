@@ -5,8 +5,6 @@ from typing import List, Dict, Any, Optional
 import requests
 from bs4 import BeautifulSoup
 
-from database.db import get_db
-from database.models import Coupon
 
 STORE_CONFIGS = {
     "Mercado Livre": {
