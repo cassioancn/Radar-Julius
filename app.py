@@ -846,32 +846,53 @@ with tab_basket:
         f"comprando tudo na **Melhor Loja Única** ou aproveitando o **Modo Julius Extremo (Cesta Fracionada)**!"
     )
 
+    DEFAULT_BASKET_TEXT = (
+        "Arroz 5kg\nFeijão Preto 1kg\nLeite Integral 1L\nAzeite de Oliva Extra Virgem\nCafé em Pó 500g"
+    )
+    if "basket_input_area" not in st.session_state:
+        st.session_state["basket_input_area"] = DEFAULT_BASKET_TEXT
+
+    def _set_basket_preset(preset_text: str):
+        st.session_state["basket_input_area"] = preset_text
+        st.session_state["basket_last_result"] = None
+
+    def _clear_basket_text():
+        st.session_state["basket_input_area"] = ""
+        st.session_state["basket_last_result"] = None
+
     st.write("**💡 Cestas Prontas para Testar:**")
     col_pre1, col_pre2, col_pre3, col_pre4 = st.columns(4)
     with col_pre1:
-        if st.button("🛒 Cesta Básica Familiar", use_container_width=True, key="btn_preset_basica"):
-            st.session_state["basket_input_area"] = "Arroz 5kg\nFeijão Preto 1kg\nÓleo de Soja 900ml\nAçúcar Refinado 1kg\nLeite Integral 1L\nCafé em Pó 500g\nFarinha de Trigo 1kg\nSal Refinado 1kg"
-            st.session_state["basket_last_result"] = None
-            st.rerun()
+        st.button(
+            "🛒 Cesta Básica Familiar",
+            use_container_width=True,
+            key="btn_preset_basica",
+            on_click=_set_basket_preset,
+            args=("Arroz 5kg\nFeijão Preto 1kg\nÓleo de Soja 900ml\nAçúcar Refinado 1kg\nLeite Integral 1L\nCafé em Pó 500g\nFarinha de Trigo 1kg\nSal Refinado 1kg",)
+        )
     with col_pre2:
-        if st.button("🥩 Churrasco Econômico", use_container_width=True, key="btn_preset_churras"):
-            st.session_state["basket_input_area"] = "Picanha Bovina kg\nCerveja Heineken Lata\nCarvão Vegetal 3kg\nLinguiça Toscana kg\nPão de Alho"
-            st.session_state["basket_last_result"] = None
-            st.rerun()
+        st.button(
+            "🥩 Churrasco Econômico",
+            use_container_width=True,
+            key="btn_preset_churras",
+            on_click=_set_basket_preset,
+            args=("Picanha Bovina kg\nCerveja Heineken Lata\nCarvão Vegetal 3kg\nLinguiça Toscana kg\nPão de Alho",)
+        )
     with col_pre3:
-        if st.button("🧼 Limpeza da Casa", use_container_width=True, key="btn_preset_limpeza"):
-            st.session_state["basket_input_area"] = "Sabão Líquido Omo\nDetergente Ypê 500ml\nÁgua Sanitária 2L\nAmaciante Comfort 1.5L\nDesinfetante Pinho Sol 1L"
-            st.session_state["basket_last_result"] = None
-            st.rerun()
+        st.button(
+            "🧼 Limpeza da Casa",
+            use_container_width=True,
+            key="btn_preset_limpeza",
+            on_click=_set_basket_preset,
+            args=("Sabão Líquido Omo\nDetergente Ypê 500ml\nÁgua Sanitária 2L\nAmaciante Comfort 1.5L\nDesinfetante Pinho Sol 1L",)
+        )
     with col_pre4:
-        if st.button("🥪 Café & Lanche", use_container_width=True, key="btn_preset_lanche"):
-            st.session_state["basket_input_area"] = "Pão de Forma Tradicional\nQueijo Mussarela fatiado\nPresunto Cozido fatiado\nManteiga com sal 200g\nCafé em Pó 500g"
-            st.session_state["basket_last_result"] = None
-            st.rerun()
-
-    if "basket_input_area" not in st.session_state:
-        st.session_state["basket_input_area"] = (
-            "Arroz 5kg\nFeijão Preto 1kg\nLeite Integral 1L\nAzeite de Oliva Extra Virgem\nCafé em Pó 500g"
+        st.button(
+            "🥪 Café & Lanche",
+            use_container_width=True,
+            key="btn_preset_lanche",
+            on_click=_set_basket_preset,
+            args=("Pão de Forma Tradicional\nQueijo Mussarela fatiado\nPresunto Cozido fatiado\nManteiga com sal 200g\nCafé em Pó 500g",)
         )
 
     basket_text = st.text_area(
@@ -884,10 +905,7 @@ with tab_basket:
     with col_btn_opt:
         btn_optimize = st.button("⚡ Otimizar Cesto de Compras (Encontrar Menores Preços)", type="primary", use_container_width=True, key="btn_optimize_basket")
     with col_btn_clr:
-        if st.button("🗑️ Limpar Lista", use_container_width=True, key="btn_clear_basket"):
-            st.session_state["basket_input_area"] = ""
-            st.session_state["basket_last_result"] = None
-            st.rerun()
+        st.button("🗑️ Limpar Lista", use_container_width=True, key="btn_clear_basket", on_click=_clear_basket_text)
 
     if btn_optimize and basket_text.strip():
         items_list = [line.strip() for line in basket_text.splitlines() if line.strip()]
