@@ -848,31 +848,34 @@ with tab_basket:
 
     st.write("**💡 Cestas Prontas para Testar:**")
     col_pre1, col_pre2, col_pre3, col_pre4 = st.columns(4)
-    preset_cesta = None
     with col_pre1:
         if st.button("🛒 Cesta Básica Familiar", use_container_width=True, key="btn_preset_basica"):
-            preset_cesta = "Arroz 5kg\nFeijão Preto 1kg\nÓleo de Soja 900ml\nAçúcar Refinado 1kg\nLeite Integral 1L\nCafé em Pó 500g\nFarinha de Trigo 1kg\nSal Refinado 1kg"
+            st.session_state["basket_input_area"] = "Arroz 5kg\nFeijão Preto 1kg\nÓleo de Soja 900ml\nAçúcar Refinado 1kg\nLeite Integral 1L\nCafé em Pó 500g\nFarinha de Trigo 1kg\nSal Refinado 1kg"
+            st.session_state["basket_last_result"] = None
+            st.rerun()
     with col_pre2:
         if st.button("🥩 Churrasco Econômico", use_container_width=True, key="btn_preset_churras"):
-            preset_cesta = "Picanha Bovina kg\nCerveja Heineken Lata\nCarvão Vegetal 3kg\nLinguiça Toscana kg\nPão de Alho"
+            st.session_state["basket_input_area"] = "Picanha Bovina kg\nCerveja Heineken Lata\nCarvão Vegetal 3kg\nLinguiça Toscana kg\nPão de Alho"
+            st.session_state["basket_last_result"] = None
+            st.rerun()
     with col_pre3:
         if st.button("🧼 Limpeza da Casa", use_container_width=True, key="btn_preset_limpeza"):
-            preset_cesta = "Sabão Líquido Omo\nDetergente Ypê 500ml\nÁgua Sanitária 2L\nAmaciante Comfort 1.5L\nDesinfetante Pinho Sol 1L"
+            st.session_state["basket_input_area"] = "Sabão Líquido Omo\nDetergente Ypê 500ml\nÁgua Sanitária 2L\nAmaciante Comfort 1.5L\nDesinfetante Pinho Sol 1L"
+            st.session_state["basket_last_result"] = None
+            st.rerun()
     with col_pre4:
         if st.button("🥪 Café & Lanche", use_container_width=True, key="btn_preset_lanche"):
-            preset_cesta = "Pão de Forma Tradicional\nQueijo Mussarela fatiado\nPresunto Cozido fatiado\nManteiga com sal 200g\nCafé em Pó 500g"
+            st.session_state["basket_input_area"] = "Pão de Forma Tradicional\nQueijo Mussarela fatiado\nPresunto Cozido fatiado\nManteiga com sal 200g\nCafé em Pó 500g"
+            st.session_state["basket_last_result"] = None
+            st.rerun()
 
-    if preset_cesta:
-        st.session_state["basket_items_input"] = preset_cesta
-
-    initial_basket_text = st.session_state.get(
-        "basket_items_input",
-        "Arroz 5kg\nFeijão Preto 1kg\nLeite Integral 1L\nAzeite de Oliva Extra Virgem\nCafé em Pó 500g"
-    )
+    if "basket_input_area" not in st.session_state:
+        st.session_state["basket_input_area"] = (
+            "Arroz 5kg\nFeijão Preto 1kg\nLeite Integral 1L\nAzeite de Oliva Extra Virgem\nCafé em Pó 500g"
+        )
 
     basket_text = st.text_area(
         "Digite ou cole os itens da sua lista (um produto por linha):",
-        value=initial_basket_text,
         height=140,
         key="basket_input_area"
     )
@@ -882,7 +885,7 @@ with tab_basket:
         btn_optimize = st.button("⚡ Otimizar Cesto de Compras (Encontrar Menores Preços)", type="primary", use_container_width=True, key="btn_optimize_basket")
     with col_btn_clr:
         if st.button("🗑️ Limpar Lista", use_container_width=True, key="btn_clear_basket"):
-            st.session_state["basket_items_input"] = ""
+            st.session_state["basket_input_area"] = ""
             st.session_state["basket_last_result"] = None
             st.rerun()
 
@@ -1210,40 +1213,6 @@ with tab_coupons:
 # ABA 5: PRODUTOS MONITORADOS, LINKS DIRETOS & TOP 3 HISTÓRICO
 # -------------------------------------------------------------
 with tab_monitor:
-    st.subheader("📊 Produtos & Links em Monitoramento Ativo")
-    st.caption("O Radar Julius armazena os 3 menores preços de todos os tempos de cada produto/link e a data exata da captura para fins de comparação.")
-
-    # Recurso Novo: Monitorar Link Específico (URL Direta)
-    with st.expander("🔗 Monitorar Link Web Específico (URL no Mercado Livre, Amazon, Shopee, Magalu, Atacadão, etc.)", expanded=False):
-        st.caption("Cole o link direto de qualquer produto online. O Julius extrai o título, imagem e preço atual, mantendo um radar contínuo com histórico e alertas de queda no WhatsApp!")
-        col_u_url, col_u_drop, col_u_btn = st.columns([3, 1.2, 1.5])
-        with col_u_url:
-            specific_url_input = st.text_input("Cole o Link (URL) do Produto:", placeholder="https://www.mercadolivre.com.br/...", key="input_specific_url")
-        with col_u_drop:
-            specific_url_drop = st.number_input("Alerta se cair >= (%)", min_value=1.0, max_value=80.0, value=10.0, step=1.0, key="input_specific_url_drop")
-        with col_u_btn:
-            st.write("")
-            st.write("")
-            btn_add_url = st.button("🚀 Monitorar Link Direto", type="primary", use_container_width=True, key="btn_add_url_track")
-
-        if btn_add_url and specific_url_input.strip():
-            with st.spinner("Acessando o link e capturando dados do produto..."):
-                try:
-                    url_track_res = track_specific_url(
-                        target_url=specific_url_input.strip(),
-                        target_drop_pct=specific_url_drop,
-                        user_cep=user_cep,
-                        user_city=user_city,
-                        user_state=user_state
-                    )
-                    if url_track_res and url_track_res.get("success"):
-                        st.success(f"✅ Produto monitorado com sucesso! Loja: **{url_track_res.get('store')}** | Preço Atual: **R$ {url_track_res.get('price'):.2f}**")
-                        st.rerun()
-                    else:
-                        st.error(f"❌ Não foi possível monitorar o link: {url_track_res.get('error') if url_track_res else 'Falha ao acessar o link'}")
-                except Exception as ex:
-                    st.error(f"❌ Erro ao monitorar este link: {ex}")
-
     products_data = []
     with get_db() as db:
         tracked_list = db.query(TrackedProduct).order_by(TrackedProduct.created_at.desc()).all()
@@ -1283,6 +1252,57 @@ with tab_monitor:
                 } for c in captures]
             })
 
+    col_h_mon, col_h_clear = st.columns([3, 1.3])
+    with col_h_mon:
+        st.subheader("📊 Produtos & Links em Monitoramento Ativo")
+        st.caption("O Radar Julius armazena os 3 menores preços de todos os tempos de cada produto/link e a data exata da captura para fins de comparação.")
+    with col_h_clear:
+        st.write("")
+        if products_data:
+            with st.popover("🗑️ Limpar Todos", use_container_width=True):
+                st.warning("⚠️ Deseja remover todos os monitoramentos?")
+                st.caption(f"Isso apagará permanentemente os {len(products_data)} itens cadastrados e seus históricos.")
+                if st.button("Sim, Limpar Tudo", type="primary", use_container_width=True, key="btn_confirm_clear_all_tracked"):
+                    with get_db() as db:
+                        db.query(PriceCapture).delete()
+                        db.query(HistoricalTopPrice).delete()
+                        db.query(NotificationLog).delete()
+                        db.query(TrackedProduct).delete()
+                        db.commit()
+                    st.success("Todos os monitoramentos foram removidos!")
+                    st.rerun()
+
+    # Recurso Novo: Monitorar Link Específico (URL Direta)
+    with st.expander("🔗 Monitorar Link Web Específico (URL no Mercado Livre, Amazon, Shopee, Magalu, Atacadão, etc.)", expanded=False):
+        st.caption("Cole o link direto de qualquer produto online. O Julius extrai o título, imagem e preço atual, mantendo um radar contínuo com histórico e alertas de queda no WhatsApp!")
+        col_u_url, col_u_drop, col_u_btn = st.columns([3, 1.2, 1.5])
+        with col_u_url:
+            specific_url_input = st.text_input("Cole o Link (URL) do Produto:", placeholder="https://www.mercadolivre.com.br/...", key="input_specific_url")
+        with col_u_drop:
+            specific_url_drop = st.number_input("Alerta se cair >= (%)", min_value=1.0, max_value=80.0, value=10.0, step=1.0, key="input_specific_url_drop")
+        with col_u_btn:
+            st.write("")
+            st.write("")
+            btn_add_url = st.button("🚀 Monitorar Link Direto", type="primary", use_container_width=True, key="btn_add_url_track")
+
+        if btn_add_url and specific_url_input.strip():
+            with st.spinner("Acessando o link e capturando dados do produto..."):
+                try:
+                    url_track_res = track_specific_url(
+                        target_url=specific_url_input.strip(),
+                        target_drop_pct=specific_url_drop,
+                        user_cep=user_cep,
+                        user_city=user_city,
+                        user_state=user_state
+                    )
+                    if url_track_res and url_track_res.get("success"):
+                        st.success(f"✅ Produto monitorado com sucesso! Loja: **{url_track_res.get('store')}** | Preço Atual: **R$ {url_track_res.get('price'):.2f}**")
+                        st.rerun()
+                    else:
+                        st.error(f"❌ Não foi possível monitorar o link: {url_track_res.get('error') if url_track_res else 'Falha ao acessar o link'}")
+                except Exception as ex:
+                    st.error(f"❌ Erro ao monitorar este link: {ex}")
+
     if not products_data:
         st.info("Nenhum produto cadastrado ainda. Use a aba de busca acima para pesquisar e adicionar produtos ao radar!")
     else:
@@ -1299,7 +1319,7 @@ with tab_monitor:
                     st.write(f"**Última Checagem:** {p['last_checked_at'].strftime('%d/%m/%Y %H:%M') if p['last_checked_at'] else 'Pendente'}")
                     st.write(f"**Status:** {'🟢 Ativo' if p['active'] else '⚪ Inativo'}")
                 with col_info3:
-                    if st.button(f"🔄 Rechecar Agora", key=f"recheck_{p['id']}"):
+                    if st.button(f"🔄 Rechecar Agora", key=f"recheck_{p['id']}", use_container_width=True):
                         with st.spinner(f"Buscando preços atualizados para {p['name']}..."):
                             try:
                                 if p.get("is_url_specific"):
@@ -1311,6 +1331,16 @@ with tab_monitor:
                                 st.rerun()
                             except Exception as ex:
                                 st.error(f"Erro ao rechecar: {ex}")
+
+                    if st.button(f"🗑️ Remover do Radar", key=f"del_track_{p['id']}", use_container_width=True):
+                        with get_db() as db:
+                            db.query(PriceCapture).filter(PriceCapture.product_id == p['id']).delete()
+                            db.query(HistoricalTopPrice).filter(HistoricalTopPrice.product_id == p['id']).delete()
+                            db.query(NotificationLog).filter(NotificationLog.product_id == p['id']).delete()
+                            db.query(TrackedProduct).filter(TrackedProduct.id == p['id']).delete()
+                            db.commit()
+                        st.success(f"'{p['name']}' removido do monitoramento!")
+                        st.rerun()
 
                 st.markdown("#### 🥇🥈🥉 Os 3 Melhores Preços Históricos Gravados")
                 if p["historical_tops"]:

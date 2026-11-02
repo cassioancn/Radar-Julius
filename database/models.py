@@ -29,6 +29,7 @@ class TrackedProduct(Base):
     # Relacionamentos
     captures = relationship("PriceCapture", back_populates="product", cascade="all, delete-orphan")
     historical_top = relationship("HistoricalTopPrice", back_populates="product", cascade="all, delete-orphan", order_by="HistoricalTopPrice.rank")
+    notifications = relationship("NotificationLog", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<TrackedProduct(id={self.id}, name='{self.name}', target_drop={self.target_drop_pct}%, is_url={self.is_url_specific})>"
