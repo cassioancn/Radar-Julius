@@ -1,6 +1,7 @@
 import os
 import textwrap
 from pathlib import Path
+from typing import Optional
 import streamlit as st
 import pandas as pd
 from datetime import datetime
@@ -15,7 +16,12 @@ from scrapers.manager import ScraperManager
 from scrapers.coupons import coupon_manager
 from scrapers.url_scraper import url_product_scraper, track_specific_url, check_and_persist_tracked_url
 from services.basket_service import basket_service
-from geo.locator import get_location_from_cep, get_available_supermarkets_for_location, clean_cep
+from geo.locator import (
+    get_location_from_cep,
+    get_available_supermarkets_for_location,
+    discover_nearby_supermarkets,
+    clean_cep
+)
 from notifications.whatsapp_dispatcher import (
     dispatch_price_drop_alert,
     test_whatsapp_connection,
@@ -117,6 +123,26 @@ init_db()
 # Instâncias
 scraper_manager = ScraperManager()
 monitor = get_monitor_instance()
+
+
+@st.cache_data(ttl=1800, show_spinner=False)
+def cached_discover_nearby_markets(
+    cep: str,
+    lat: Optional[float],
+    lon: Optional[float],
+    city: str,
+    uf: str,
+    radius_km: float
+):
+    """Cache em sessão/servidor para descoberta geográfica de mercados via OpenStreetMap."""
+    return discover_nearby_supermarkets(
+        cep=cep,
+        lat=lat,
+        lon=lon,
+        city=city,
+        uf=uf,
+        radius_km=radius_km
+    )
 
 # CSS Customizado com tema Julius e Responsividade Mobile
 st.markdown("""
@@ -521,6 +547,12 @@ with st.sidebar:
         st.session_state["user_state"] = "RS"
     if "user_neighborhood" not in st.session_state:
         st.session_state["user_neighborhood"] = "Olímpica"
+    if "user_lat" not in st.session_state:
+        st.session_state["user_lat"] = -29.86139
+    if "user_lon" not in st.session_state:
+        st.session_state["user_lon"] = -51.17917
+    if "user_radius_km" not in st.session_state:
+        st.session_state["user_radius_km"] = 5
 
     def handle_cep_update(novo_cep: str):
         if not novo_cep:
@@ -531,6 +563,8 @@ with st.sidebar:
             st.session_state["user_city"] = loc_res["localidade"]
             st.session_state["user_state"] = loc_res["uf"]
             st.session_state["user_neighborhood"] = loc_res.get("bairro", "")
+            st.session_state["user_lat"] = loc_res.get("lat")
+            st.session_state["user_lon"] = loc_res.get("lon")
             st.session_state["cep_msg"] = ("success", f"📌 {loc_res['localidade']} - {loc_res['uf']}" + (f" ({loc_res['bairro']})" if loc_res.get("bairro") else ""))
         else:
             st.session_state["cep_msg"] = ("error", "⚠️ CEP não localizado na base dos Correios.")
@@ -559,6 +593,8 @@ with st.sidebar:
     user_state = st.session_state["user_state"]
     user_neighborhood = st.session_state.get("user_neighborhood", "")
     user_cep = st.session_state["user_cep"]
+    user_lat = st.session_state.get("user_lat")
+    user_lon = st.session_state.get("user_lon")
 
     if "cep_msg" in st.session_state:
         msg_type, msg_text = st.session_state["cep_msg"]
@@ -569,12 +605,25 @@ with st.sidebar:
     else:
         st.success(f"📌 {user_city} - {user_state}" + (f" ({user_neighborhood})" if user_neighborhood else ""))
 
+    user_radius_km = st.slider(
+        "📡 Raio ao redor do CEP (km):",
+        min_value=2,
+        max_value=20,
+        value=int(st.session_state.get("user_radius_km", 5)),
+        step=1,
+        key="sidebar_radius_km",
+        help="Define o raio usado para descobrir mercados próximos ao seu CEP (inclusive cidades vizinhas)."
+    )
+    st.session_state["user_radius_km"] = user_radius_km
+
     with st.expander("✏️ Ajustar Cidade Manualmente", expanded=False):
         m_city = st.text_input("Nome da Cidade:", value=user_city, key="m_city_key")
         m_state = st.text_input("UF (Estado):", value=user_state, key="m_state_key")
         if st.button("Salvar Local Manual", use_container_width=True):
             st.session_state["user_city"] = m_city.strip()
             st.session_state["user_state"] = m_state.strip().upper()
+            st.session_state["user_lat"] = None
+            st.session_state["user_lon"] = None
             st.session_state["cep_msg"] = ("success", f"📌 {m_city.strip()} - {m_state.strip().upper()} (Manual)")
             st.rerun()
     
@@ -728,13 +777,14 @@ with tab_mercado:
         btn_search_mercado = st.button("🚀 Buscar no Supermercado & Atacado", use_container_width=True, type="primary", key="btn_mercado_search")
 
     if btn_search_mercado and mercado_query:
-        with st.spinner(f"Consultando Atacadão e Rissul para '{mercado_query}' ({user_city} - {user_state})..."):
+        with st.spinner(f"Consultando Super Rissul, Zaffari/Bourbon e Atacadão para '{mercado_query}' (CEP {user_cep} • {user_city} - {user_state})..."):
             mercado_res = scraper_manager.search_all(
                 query=mercado_query,
                 include_retail=False,
                 include_supermarkets=True,
                 city=user_city,
                 uf=user_state,
+                cep=user_cep,
                 top_n=8,
                 target_unit=target_unit_code,
                 sort_by_unit=sort_by_unit,
@@ -780,7 +830,17 @@ with tab_mercado:
 
                 unit_html = f'<span class="unit-badge">⚖️ {item.unit_label}</span>' if item.has_unit_price and item.unit_label else ''
                 size_html = f'<span class="size-badge">📦 {item.detected_size}</span>' if item.detected_size else ''
-                badges_row_html = f'<div class="badges-row">{unit_html}{size_html}</div>' if (unit_html or size_html) else ''
+                reg_flag = getattr(item, "regional_confirmed", None)
+                reg_html = (
+                    '<span class="unit-badge" style="background-color: #14532d; color: #86efac; border: 1px solid #22c55e;">✅ Preço Regional CEP</span>'
+                    if reg_flag is True
+                    else (
+                        '<span class="size-badge" style="background-color: #334155; color: #cbd5e1;">🌐 Catálogo Online (confirmar loja local)</span>'
+                        if reg_flag is False
+                        else ''
+                    )
+                )
+                badges_row_html = f'<div class="badges-row">{unit_html}{size_html}{reg_html}</div>' if (unit_html or size_html or reg_html) else ''
                 right_price_html = f'<div style="text-align: right;">{orig_html}{disc_html}</div>'
 
                 card_html = (
@@ -834,6 +894,32 @@ with tab_mercado:
                             db.commit()
                             scraper_manager.process_and_persist_tracked_product(new_prod.id, res)
                             st.success(f"✅ '{prod_m_name}' cadastrado! Monitoramento ativo.")
+
+    nearby_preview = cached_discover_nearby_markets(
+        cep=user_cep,
+        lat=user_lat,
+        lon=user_lon,
+        city=user_city,
+        uf=user_state,
+        radius_km=float(user_radius_km)
+    )
+    nearby_summary = nearby_preview.get("summary", {})
+    nearby_list = nearby_preview.get("markets", [])
+    if nearby_list:
+        cities_txt = ", ".join(nearby_summary.get("cities_covered", [])[:4]) or user_city
+        with st.expander(
+            f"📍 {nearby_summary.get('total', 0)} mercados físicos encontrados em {user_radius_km} km ao redor do CEP {user_cep} ({cities_txt})",
+            expanded=False
+        ):
+            st.caption(
+                "Estes estabelecimentos ficam dentro do raio escolhido (incluindo cidades vizinhas). "
+                "Redes marcadas como **Online** participam da busca automática acima; redes físicas sem e-commerce aberto aparecem na aba **📍 Mercados** com distância e rota."
+            )
+            for mk in nearby_list[:10]:
+                status_icon = "✅ Online no Radar" if mk["has_online_scraper"] else "🏪 Loja Física"
+                st.write(
+                    f"• **{mk['name']}** — `{mk['distance_km']:.2f} km` • {mk.get('neighborhood') or mk.get('city')} ({mk.get('city')}) — _{status_icon}_"
+                )
 
 # -------------------------------------------------------------
 # ABA 2: 🧺 CESTO DE COMPRAS (OTIMIZADOR MULTI-MERCADOS)
@@ -912,11 +998,12 @@ with tab_basket:
         if not items_list:
             st.warning("Insira pelo menos um item na lista de compras.")
         else:
-            with st.spinner(f"Varrendo os atacarejos e mercados de {user_city} para {len(items_list)} itens simultaneamente..."):
+            with st.spinner(f"Varrendo mercados para {len(items_list)} itens (CEP {user_cep} • {user_city} - {user_state})..."):
                 opt_res = basket_service.optimize_basket(
                     item_queries=items_list,
                     city=user_city,
                     uf=user_state,
+                    cep=user_cep,
                     include_retail=False
                 )
                 st.session_state["basket_last_result"] = opt_res
@@ -1249,6 +1336,7 @@ with tab_monitor:
                 "niche": p.niche or "Geral",
                 "target_drop_pct": p.target_drop_pct or 10.0,
                 "last_best_price": p.last_best_price or 0.0,
+                "user_cep": p.user_cep or "",
                 "user_city": p.user_city or "São Leopoldo",
                 "user_state": p.user_state or "RS",
                 "last_checked_at": p.last_checked_at,
@@ -1330,7 +1418,8 @@ with tab_monitor:
                 col_info1, col_info2, col_info3 = st.columns([2, 2, 2])
                 with col_info1:
                     st.write(f"**Categoria / Nicho:** {p['niche']}")
-                    st.write(f"**Localização Alvo:** {p['user_city']} - {p['user_state']}")
+                    cep_suffix = f" (CEP {p['user_cep']})" if p.get("user_cep") else ""
+                    st.write(f"**Localização Alvo:** {p['user_city']} - {p['user_state']}{cep_suffix}")
                     if p.get("is_url_specific") and p.get("target_url"):
                         st.link_button("🌐 Abrir Link do Produto", p["target_url"], use_container_width=True)
                 with col_info2:
@@ -1343,7 +1432,12 @@ with tab_monitor:
                                 if p.get("is_url_specific"):
                                     check_and_persist_tracked_url(p["id"])
                                 else:
-                                    s_res = scraper_manager.search_all(query=p['name'], city=p['user_city'], uf=p['user_state'])
+                                    s_res = scraper_manager.search_all(
+                                        query=p['name'],
+                                        city=p['user_city'],
+                                        uf=p['user_state'],
+                                        cep=p.get('user_cep') or user_cep
+                                    )
                                     scraper_manager.process_and_persist_tracked_product(p['id'], s_res)
                                 st.success("Atualizado!")
                                 st.rerun()
@@ -1572,11 +1666,108 @@ with tab_whatsapp:
 # ABA 6: GEOLOCALIZAÇÃO & MERCADOS PRÓXIMOS
 # -------------------------------------------------------------
 with tab_geo:
-    st.subheader(f"📍 Redes de Mercados Disponíveis para {user_city} - {user_state}")
-    available_markets = get_available_supermarkets_for_location(user_state, user_city)
+    st.subheader(f"📍 Mercados ao Redor do CEP {user_cep} (Raio de {user_radius_km} km)")
+    st.caption(
+        f"Descoberta geográfica real centrada em **{user_city} - {user_state}**"
+        + (f" ({user_neighborhood})" if user_neighborhood else "")
+        + ". O raio considera também bairros e cidades vizinhas. Ajuste a distância (2 km a 20 km) na barra lateral."
+    )
 
-    for m in available_markets:
-        with st.container():
+    with st.spinner(f"Mapeando mercados num raio de {user_radius_km} km ao redor do CEP {user_cep}..."):
+        geo_data = cached_discover_nearby_markets(
+            cep=user_cep,
+            lat=user_lat,
+            lon=user_lon,
+            city=user_city,
+            uf=user_state,
+            radius_km=float(user_radius_km)
+        )
+
+    geo_markets = geo_data.get("markets", [])
+    geo_summary = geo_data.get("summary", {})
+    geo_center = geo_data.get("center", {})
+
+    col_g1, col_g2, col_g3, col_g4 = st.columns(4)
+    col_g1.metric("🏪 Mercados no Raio", str(geo_summary.get("total", 0)))
+    col_g2.metric("✅ Com Busca Online", str(geo_summary.get("online_integrated", 0)))
+    col_g3.metric("🏬 Apenas Loja Física", str(geo_summary.get("physical_only", 0)))
+    cities_covered = geo_summary.get("cities_covered", [])
+    col_g4.metric("🏙️ Cidades Abrangidas", str(len(cities_covered)))
+
+    if cities_covered:
+        st.info(f"🌐 **Municípios no raio de {user_radius_km} km:** {', '.join(cities_covered)}")
+
+    if geo_markets:
+        # Mapa nativo com coordenadas reais do CEP + estabelecimentos encontrados
+        map_rows = [
+            {
+                "lat": m["lat"],
+                "lon": m["lon"],
+                "nome": m["name"],
+                "cor": "#22c55e" if m["has_online_scraper"] else "#38bdf8"
+            }
+            for m in geo_markets
+            if m.get("lat") is not None and m.get("lon") is not None
+        ]
+        if geo_center.get("lat") is not None and geo_center.get("lon") is not None:
+            map_rows.append({
+                "lat": geo_center["lat"],
+                "lon": geo_center["lon"],
+                "nome": f"Seu CEP ({user_cep})",
+                "cor": "#ef4444"
+            })
+        if map_rows:
+            st.map(pd.DataFrame(map_rows), latitude="lat", longitude="lon", color="cor", zoom=12)
+            st.caption("🔴 Seu CEP  •  🟢 Mercado com busca online integrada  •  🔵 Loja física no raio")
+
+        geo_filter = st.radio(
+            "Filtrar lista:",
+            [
+                "Todos os Mercados Próximos",
+                "✅ Apenas com Busca Online Integrada",
+                "🏪 Apenas Lojas Físicas (sem e-commerce público)"
+            ],
+            horizontal=True,
+            key="geo_market_filter"
+        )
+
+        filtered_markets = geo_markets
+        if "Busca Online" in geo_filter:
+            filtered_markets = [m for m in geo_markets if m["has_online_scraper"]]
+        elif "Lojas Físicas" in geo_filter:
+            filtered_markets = [m for m in geo_markets if not m["has_online_scraper"]]
+
+        for idx, m in enumerate(filtered_markets, start=1):
+            m_badge_color = "#22c55e" if m["has_online_scraper"] else "#475569"
+            m_badge_text = "✅ Preço Online no Radar" if m["has_online_scraper"] else "🏪 Loja Física Local"
+            addr_parts = [p for p in [m.get("street"), m.get("neighborhood"), m.get("city")] if p]
+            addr_str = " • ".join(addr_parts) if addr_parts else f"{user_city} - {user_state}"
+
+            m_html = (
+                f'<div class="price-card">'
+                f'<div class="card-body" style="align-items: center;">'
+                f'<div class="card-info">'
+                f'<span class="julius-badge" style="background-color: #0284c7; color: white;">#{idx} • {m["distance_km"]:.2f} km</span>'
+                f'<span class="store-badge-sub" style="margin-left: 8px; background-color: {m_badge_color}; color: white;">{m_badge_text}</span>'
+                f'<h4 style="margin: 8px 0 4px 0; color: #f8fafc; font-size: 16px;">🏪 {m["name"]}</h4>'
+                f'<p style="margin: 2px 0; color: #94a3b8; font-size: 13px;">📌 {addr_str}</p>'
+                f'<span style="font-size: 12px; color: #38bdf8;">ℹ️ {m["online_status"]}</span>'
+                f'</div>'
+                f'</div>'
+                f'</div>'
+            )
+            st.markdown(m_html, unsafe_allow_html=True)
+            if m.get("maps_url"):
+                st.link_button(f"🗺️ Ver {m['name']} no Google Maps ({m['distance_km']:.2f} km)", m["maps_url"], use_container_width=True)
+    else:
+        st.warning(
+            f"Não foi possível obter estabelecimentos num raio de {user_radius_km} km neste momento. "
+            "Tente aumentar o raio na barra lateral ou conferir o CEP informado."
+        )
+
+    with st.expander("📋 Redes Mapeadas na UF (Cobertura Regional)", expanded=False):
+        available_markets = get_available_supermarkets_for_location(user_state, user_city)
+        for m in available_markets:
             m_badge_color = "#22c55e" if m['is_direct_city_match'] else "#64748b"
             m_badge_text = "📍 Unidade Direta na Cidade" if m['is_direct_city_match'] else "🚚 Atende a Região"
             m_html = (

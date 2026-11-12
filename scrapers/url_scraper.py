@@ -8,6 +8,13 @@ from bs4 import BeautifulSoup
 
 from .base import ProductItem, parse_price_brl
 
+SUPERMARKET_STORE_NAMES = ("Atacadão", "Super Rissul", "Macromix", "Stock Center", "Carrefour", "Zaffari / Bourbon")
+
+
+def _store_type_for(store_name: str) -> str:
+    return "supermarket" if store_name in SUPERMARKET_STORE_NAMES else "retail"
+
+
 def detect_store_from_url(url: str) -> str:
     """Identifica o nome amigável da loja a partir do domínio da URL."""
     try:
@@ -28,6 +35,8 @@ def detect_store_from_url(url: str) -> str:
             return "Macromix"
         elif "stockcenter" in domain:
             return "Stock Center"
+        elif "zaffari" in domain or "bourbon" in domain:
+            return "Zaffari / Bourbon"
         elif "carrefour" in domain:
             return "Carrefour"
         elif "casasbahia" in domain:
@@ -220,7 +229,7 @@ class URLProductScraper:
                     original_price=original_price,
                     discount_pct=None,
                     store=store_name,
-                    store_type="supermarket" if store_name in ("Atacadão", "Super Rissul", "Macromix", "Stock Center", "Carrefour") else "retail",
+                    store_type=_store_type_for(store_name),
                     url=url,
                     image_url=image_url
                 )
@@ -316,7 +325,7 @@ class URLProductScraper:
                         original_price=None,
                         discount_pct=None,
                         store=store_name,
-                        store_type="supermarket" if store_name in ("Atacadão", "Super Rissul", "Macromix", "Stock Center", "Carrefour") else "retail",
+                        store_type=_store_type_for(store_name),
                         url=url,
                         image_url=img_url
                     )

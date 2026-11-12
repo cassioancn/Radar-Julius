@@ -74,6 +74,7 @@ class BackgroundPriceMonitor:
                 products_to_check.append({
                     "id": p.id,
                     "name": p.name,
+                    "cep": p.user_cep,
                     "city": p.user_city,
                     "state": p.user_state,
                     "target_drop": p.target_drop_pct,
@@ -105,6 +106,7 @@ class BackgroundPriceMonitor:
                         query=prod["name"],
                         city=prod.get("city"),
                         uf=prod.get("state"),
+                        cep=prod.get("cep"),
                         top_n=5
                     )
 

@@ -22,6 +22,7 @@ class BasketOptimizerService:
         item_queries: List[str],
         city: Optional[str] = "Esteio",
         uf: Optional[str] = "RS",
+        cep: Optional[str] = None,
         include_retail: bool = False
     ) -> Dict[str, Any]:
         """
@@ -42,6 +43,7 @@ class BasketOptimizerService:
                     include_supermarkets=True,
                     city=city,
                     uf=uf,
+                    cep=cep,
                     top_n=5
                 )
                 return query, res.get("top_prices", [])
@@ -137,7 +139,8 @@ class BasketOptimizerService:
             savings_brl=savings_brl,
             stores_group=stores_group,
             city=city,
-            uf=uf
+            uf=uf,
+            cep=cep
         )
 
         return {
@@ -167,12 +170,14 @@ class BasketOptimizerService:
         savings_brl: float,
         stores_group: Dict[str, List[Dict[str, Any]]],
         city: Optional[str] = "Esteio",
-        uf: Optional[str] = "RS"
+        uf: Optional[str] = "RS",
+        cep: Optional[str] = None
     ) -> str:
         """Formata a lista de compras para envio prático pelo WhatsApp."""
+        region_str = f"{city} - {uf}" + (f" (CEP {cep})" if cep else "")
         lines = [
             "🛒 *LISTA DE COMPRAS OTIMIZADA — RADAR JULIUS* 🎯",
-            f"📍 *Região:* {city} - {uf}",
+            f"📍 *Região:* {region_str}",
             f"📋 *Itens na Cesta:* {len(clean_items)} produtos\n"
         ]
 

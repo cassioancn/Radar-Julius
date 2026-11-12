@@ -33,6 +33,7 @@ class ProductItem:
     unit_label: Optional[str] = None
     detected_size: Optional[str] = None
     has_unit_price: bool = False
+    regional_confirmed: Optional[bool] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)

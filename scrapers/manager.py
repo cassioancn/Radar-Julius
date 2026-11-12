@@ -4,7 +4,7 @@ import concurrent.futures
 
 from .base import ProductItem
 from .retail import BuscapeScraper, MercadoLivreScraper, AmazonScraper, MagaluScraper, ShopeeScraper
-from .supermarkets import AtacadaoScraper, MacromixScraper, RissulScraper, StockCenterScraper
+from .supermarkets import AtacadaoScraper, MacromixScraper, RissulScraper, StockCenterScraper, ZaffariScraper
 from database.db import get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice
 from notifications.whatsapp_dispatcher import dispatch_price_drop_alert
@@ -24,6 +24,7 @@ class ScraperManager:
         self.supermarket_scrapers = [
             AtacadaoScraper(),
             RissulScraper(),
+            ZaffariScraper(),
             MacromixScraper(),
             StockCenterScraper()
         ]
@@ -35,6 +36,7 @@ class ScraperManager:
         include_supermarkets: bool = True,
         city: Optional[str] = None,
         uf: Optional[str] = None,
+        cep: Optional[str] = None,
         top_n: int = 5,
         target_unit: Optional[str] = None,
         sort_by_unit: bool = False,
@@ -60,6 +62,8 @@ class ScraperManager:
                         kwargs["city"] = city
                     if uf:
                         kwargs["uf"] = uf
+                    if cep:
+                        kwargs["cep"] = cep
                 return scraper.search(query=query, limit=5, **kwargs)
             except Exception:
                 return []
