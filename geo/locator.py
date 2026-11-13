@@ -8,6 +8,16 @@ import requests
 
 # Base de conhecimento de presença regional das redes de mercados
 SUPERMARKET_REGIONS = {
+    "Viezzer Supermercados": {
+        "coverage": "Rio Grande do Sul (Esteio, Canoas, São Leopoldo, Porto Alegre)",
+        "description": "Rede tradicional com unidades em Esteio e Canoas (tablóide de ofertas da semana)",
+        "states": ["RS"],
+        "cities": [
+            "Esteio", "Canoas", "São Leopoldo", "Porto Alegre", "Sapucaia do Sul"
+        ],
+        "supports_geo_catalog": True,
+        "default_zip": "93280475"
+    },
     "Super Rissul": {
         "coverage": "Rio Grande do Sul (Grande POA, Vale dos Sinos, Serra e Litoral)",
         "description": "Supermercado varejista do Grupo Unidasul (com regionalização online por CEP)",
@@ -299,6 +309,13 @@ def detect_online_integration(market_name: str, brand: str = "") -> Dict[str, An
             "status_label": "Catálogo Online Integrado (Atacadão)",
             "status_type": "online"
         }
+    if "viezzer" in norm:
+        return {
+            "chain": "Viezzer Supermercados",
+            "has_online_scraper": True,
+            "status_label": "Ofertas & Tablóide Semanal (viezzersupermercados.com.br)",
+            "status_type": "online"
+        }
 
     physical_chains = [
         ("macromix", "Macromix Atacado"),
@@ -306,7 +323,6 @@ def detect_online_integration(market_name: str, brand: str = "") -> Dict[str, An
         ("stock center", "Stock Center"),
         ("asun", "Asun Supermercados"),
         ("unisuper", "UniSuper"),
-        ("viezzer", "Viezzer Supermercados"),
         ("carrefour", "Carrefour"),
         ("nacional", "Nacional"),
         ("bistek", "Bistek"),
@@ -466,6 +482,51 @@ def discover_nearby_supermarkets(
             continue
 
     candidates: List[Dict[str, Any]] = []
+
+    # Unidades físicas de referência para garantia de cobertura sem depender exclusivamente do OSM
+    known_seeds = [
+        {
+            "name": "Viezzer Supermercados (24 de Agosto)",
+            "brand": "Viezzer Supermercados",
+            "shop_type": "supermarket",
+            "lat": -29.8606,
+            "lon": -51.1738,
+            "street": "Rua 24 de Agosto, 2534",
+            "neighborhood": "Centro / Olímpica",
+            "city": "Esteio"
+        },
+        {
+            "name": "Viezzer Supermercados (Padre Felipe)",
+            "brand": "Viezzer Supermercados",
+            "shop_type": "supermarket",
+            "lat": -29.8525,
+            "lon": -51.1818,
+            "street": "Rua Padre Felipe, 355",
+            "neighborhood": "Centro",
+            "city": "Esteio"
+        }
+    ]
+    for seed in known_seeds:
+        dist = haversine_km(lat, lon, seed["lat"], seed["lon"])
+        if dist <= radius_km:
+            integ = detect_online_integration(seed["name"], seed["brand"])
+            candidates.append({
+                "name": seed["name"],
+                "brand": seed["brand"],
+                "shop_type": seed["shop_type"],
+                "distance_km": dist,
+                "street": seed["street"],
+                "neighborhood": seed["neighborhood"],
+                "city": seed["city"],
+                "lat": seed["lat"],
+                "lon": seed["lon"],
+                "has_online_scraper": integ["has_online_scraper"],
+                "online_status": integ["status_label"],
+                "status_type": integ["status_type"],
+                "chain": integ["chain"],
+                "maps_url": f"https://www.google.com/maps/search/?api=1&query={seed['lat']},{seed['lon']}"
+            })
+
     for item in raw_by_osm_id.values():
         try:
             m_lat = float(item["lat"])

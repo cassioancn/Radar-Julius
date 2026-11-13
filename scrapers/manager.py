@@ -4,7 +4,14 @@ import concurrent.futures
 
 from .base import ProductItem
 from .retail import BuscapeScraper, MercadoLivreScraper, AmazonScraper, MagaluScraper, ShopeeScraper
-from .supermarkets import AtacadaoScraper, MacromixScraper, RissulScraper, StockCenterScraper, ZaffariScraper
+from .supermarkets import (
+    AtacadaoScraper,
+    MacromixScraper,
+    RissulScraper,
+    StockCenterScraper,
+    ZaffariScraper,
+    ViezzerScraper
+)
 from database.db import get_db
 from database.models import TrackedProduct, PriceCapture, HistoricalTopPrice
 from notifications.whatsapp_dispatcher import dispatch_price_drop_alert
@@ -25,6 +32,7 @@ class ScraperManager:
             AtacadaoScraper(),
             RissulScraper(),
             ZaffariScraper(),
+            ViezzerScraper(),
             MacromixScraper(),
             StockCenterScraper()
         ]

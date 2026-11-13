@@ -1,7 +1,14 @@
 import os
+import sys
 import textwrap
 from pathlib import Path
 from typing import Optional
+
+# Garante que o diretório raiz esteja no topo do sys.path (evita problemas de importação no Streamlit Cloud)
+BASE_DIR = Path(__file__).resolve().parent
+if str(BASE_DIR) not in sys.path:
+    sys.path.insert(0, str(BASE_DIR))
+
 import streamlit as st
 import pandas as pd
 from datetime import datetime
